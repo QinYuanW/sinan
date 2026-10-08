@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>司南 · 学习规划平台</title>
+<style>
+:root{
+  --bg:#f5f6f8;
+  --panel:#ffffff;
+  --panel-2:#fafbfc;
+  --border:#e3e6ea;
+  --border-strong:#d0d5dc;
+  --text:#1d2129;
+  --text-2:#5a6472;
+  --text-3:#8b94a3;
+  --primary:#1f5f8b;
+  --primary-soft:#e9f1f7;
+  --primary-deep:#123b58;
+  --accent:#b45309;
+  --accent-soft:#fdf3e6;
+  --ok:#1a7f4b;
+  --ok-soft:#e8f6ee;
+  --danger:#b42318;
+  --danger-soft:#fdecea;
+  --radius:10px;
+  --shadow:0 1px 2px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.04);
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Consolas,"Courier New",monospace;
+}
+*{box-sizing:border-box;}
+html,body{height:100%;margin:0;}
+body{
+  font-family:var(--font);background:var(--bg);color:var(--text);
+  font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased;
+  display:flex;flex-direction:column;height:100vh;overflow:hidden;
+}
+
+/* ---------- 顶栏 ---------- */
+header{
+  flex:0 0 auto;background:var(--panel);border-bottom:1px solid var(--border);
+  padding:10px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+}
+.brand{display:flex;align-items:baseline;gap:9px;}
+.brand h1{font-size:17px;font-weight:600;margin:0;letter-spacing:.06em;color:var(--primary-deep);}
+.brand span{font-size:11px;color:var(--text-3);letter-spacing:.04em;}
+.roles{display:flex;gap:6px;background:var(--panel-2);padding:3px;border-radius:8px;border:1px solid var(--border);}
+.role-btn{
+  border:0;background:transparent;padding:5px 13px;border-radius:6px;cursor:pointer;
+  font-family:inherit;font-size:13px;color:var(--text-2);transition:.12s;white-space:nowrap;
+}
+.role-btn:hover{color:var(--text);}
+.role-btn.on{background:var(--panel);color:var(--primary-deep);font-weight:500;box-shadow:var(--shadow);}
+.spacer{flex:1;}
+.stat{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2);}
+.stat b{font-size:15px;color:var(--primary);font-weight:600;font-variant-numeric:tabular-nums;}
+.btn{
+  border:1px solid var(--border-strong);background:var(--panel);color:var(--text-2);
+  padding:6px 13px;border-radius:7px;cursor:pointer;font-family:inherit;font-size:13px;
+  transition:.12s;white-space:nowrap;
+}
+.btn:hover{border-color:var(--primary);color:var(--primary);}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff;}
+.btn.primary:hover{background:var(--primary-deep);border-color:var(--primary-deep);color:#fff;}
+.btn.ok{background:var(--ok);border-color:var(--ok);color:#fff;}
+.btn.ok:hover{filter:brightness(.93);color:#fff;}
+.btn:disabled{opacity:.5;cursor:not-allowed;}
+
+/* ---------- 主体 ---------- */
+main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 430px;gap:16px;padding:16px 20px;overflow:hidden;min-height:0;}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);display:flex;flex-direction:column;overflow:hidden;min-height:0;}
+.card-head{
+  flex:0 0 auto;padding:11px 16px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:10px;background:var(--panel-2);
+}
+.card-head h2{font-size:13px;font-weight:600;margin:0;color:var(--text);letter-spacing:.02em;}
+.card-head .hint{font-size:11px;color:var(--text-3);}
+
+/* ---------- 聊天 ---------- */
+#chat{min-width:0;}
+#messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;}
+.msg{max-width:88%;padding:10px 13px;border-radius:10px;font-size:13.5px;word-break:break-word;}
+.msg.user{align-self:flex-end;background:var(--primary-soft);border:1px solid #d3e2ee;}
+.msg.bot{align-self:flex-start;background:var(--panel-2);border:1px solid var(--border);max-width:94%;}
+.msg.sys{align-self:center;background:transparent;border:1px dashed var(--border-strong);color:var(--text-3);font-size:12px;padding:5px 12px;}
+.msg h3{font-size:13.5px;margin:10px 0 6px;color:var(--primary-deep);font-weight:600;}
+.msg h4{font-size:13px;margin:9px 0 5px;color:var(--text);font-weight:600;}
+.msg p{margin:4px 0;}
+.msg ul{margin:5px 0;padding-left:19px;}
+.msg li{margin:2px 0;}
+.msg .sp{height:5px;}
+.msg img.preview{max-width:180px;border-radius:7px;margin-top:6px;border:1px solid var(--border);}
+.typing::after{content:'▍';animation:blink 1s steps(2) infinite;color:var(--primary);}
+@keyframes blink{50%{opacity:0;}}
+
+#composer{flex:0 0 auto;border-top:1px solid var(--border);padding:10px 12px;background:var(--panel-2);}
+#thumbs{display:flex;gap:7px;margin-bottom:8px;flex-wrap:wrap;}
+.thumb{position:relative;width:52px;height:52px;border-radius:7px;overflow:hidden;border:1px solid var(--border);}
+.thumb img{width:100%;height:100%;object-fit:cover;}
+.thumb button{
+  position:absolute;top:-5px;right:-5px;width:17px;height:17px;border-radius:50%;
+  border:0;background:var(--danger);color:#fff;font-size:11px;line-height:1;cursor:pointer;padding:0;
+}
+.composer-row{display:flex;gap:8px;align-items:flex-end;}
+#input{
+  flex:1;resize:none;border:1px solid var(--border-strong);border-radius:8px;padding:9px 11px;
+  font-family:inherit;font-size:13.5px;line-height:1.55;outline:none;max-height:120px;min-height:40px;
+  background:var(--panel);color:var(--text);
+}
+#input:focus{border-color:var(--primary);}
+.icon-btn{
+  border:1px solid var(--border-strong);background:var(--panel);width:40px;height:40px;border-radius:8px;
+  cursor:pointer;color:var(--text-2);font-size:16px;display:flex;align-items:center;justify-content:center;
+  transition:.12s;flex:0 0 auto;
+}
+.icon-btn:hover{border-color:var(--primary);color:var(--primary);}
+.quick{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;}
+.chip{
+  border:1px solid var(--border);background:var(--panel);color:var(--text-2);border-radius:20px;
+  padding:3px 11px;font-size:12px;cursor:pointer;font-family:inherit;transition:.12s;
+}
+.chip:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-soft);}
+
+/* ---------- 右面板 ---------- */
+#side{display:flex;flex-direction:column;gap:14px;overflow:hidden;min-height:0;}
+.tabs{display:flex;gap:4px;padding:9px 12px 0;background:var(--panel-2);border-bottom:1px solid var(--border);}
+.tab{
+  border:0;background:transparent;padding:7px 12px;font-family:inherit;font-size:12.5px;cursor:pointer;
+  color:var(--text-2);border-bottom:2px solid transparent;margin-bottom:-1px;transition:.12s;
+}
+.tab.on{color:var(--primary);border-bottom-color:var(--primary);font-weight:500;}
+.pane{display:none;overflow-y:auto;padding:14px;flex:1;min-height:0;}
+.pane.on{display:block;}
+
+.plan-meta{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;
+  padding-bottom:10px;border-bottom:1px dashed var(--border);font-size:12px;color:var(--text-2);}
+.plan-meta b{font-size:16px;color:var(--primary);font-weight:600;font-variant-numeric:tabular-nums;}
+
+.task{border:1px solid var(--border);border-radius:9px;padding:11px 12px;margin-bottom:9px;background:var(--panel);}
+.task.carry{border-style:dashed;background:var(--accent-soft);border-color:#f0d9b5;}
+.task-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+.task-name{font-size:13.5px;font-weight:600;color:var(--text);line-height:1.45;}
+.task-sub{font-size:11px;color:var(--text-3);margin-top:3px;}
+.prio{
+  flex:0 0 auto;font-size:11px;font-weight:600;padding:2.5px 8px;border-radius:5px;
+  font-variant-numeric:tabular-nums;font-family:var(--mono);
+}
+.prio.hi{background:var(--danger-soft);color:var(--danger);}
+.prio.mid{background:var(--accent-soft);color:var(--accent);}
+.prio.lo{background:var(--ok-soft);color:var(--ok);}
+.task-body{margin-top:8px;font-size:12.5px;color:var(--text-2);line-height:1.62;}
+.task-body .lbl{color:var(--text-3);font-size:11px;display:block;margin-top:6px;}
+.partial-tag{display:inline-block;font-size:10.5px;background:var(--accent-soft);color:var(--accent);
+  border-radius:4px;padding:1px 6px;margin-left:6px;}
+.note-box{
+  background:var(--primary-soft);border:1px solid #d3e2ee;border-radius:8px;padding:10px 12px;
+  font-size:12.5px;color:var(--primary-deep);line-height:1.62;margin-top:12px;
+}
+.empty{text-align:center;color:var(--text-3);font-size:12.5px;padding:36px 16px;line-height:1.75;}
+
+.mile{border-left:2px solid var(--primary-soft);padding:0 0 14px 13px;margin-left:5px;position:relative;}
+.mile::before{
+  content:'';position:absolute;left:-5.5px;top:4px;width:9px;height:9px;border-radius:50%;
+  background:var(--panel);border:2px solid var(--primary);
+}
+.mile-name{font-size:13px;font-weight:600;color:var(--text);}
+.mile-date{font-size:11px;color:var(--text-3);font-family:var(--mono);}
+.mile-note{font-size:12.5px;color:var(--text-2);margin-top:5px;line-height:1.6;}
+.mile-kp{font-size:11.5px;color:var(--text-3);margin-top:5px;line-height:1.6;}
+
+.mrow{display:flex;align-items:center;gap:9px;margin-bottom:9px;}
+.mrow .mn{flex:0 0 130px;font-size:12px;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.mbar{flex:1;height:7px;background:var(--bg);border-radius:4px;overflow:hidden;border:1px solid var(--border);}
+.mbar i{display:block;height:100%;border-radius:3px;}
+.mval{flex:0 0 38px;text-align:right;font-size:11.5px;color:var(--text-2);font-family:var(--mono);font-variant-numeric:tabular-nums;}
+.kpi{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
+.kpi div{background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;}
+.kpi span{display:block;font-size:11px;color:var(--text-3);}
+.kpi b{font-size:19px;color:var(--primary);font-weight:600;font-variant-numeric:tabular-nums;}
+
+/* ---------- 弹层 ---------- */
+.modal{position:fixed;inset:0;background:rgba(20,26,33,.42);display:none;align-items:center;
+  justify-content:center;z-index:50;padding:20px;}
+.modal.on{display:flex;}
+.modal-box{background:var(--panel);border-radius:12px;width:100%;max-width:470px;max-height:88vh;
+  overflow-y:auto;box-shadow:0 12px 40px rgba(16,24,40,.18);}
+.modal-head{padding:15px 18px;border-bottom:1px solid var(--border);display:flex;
+  justify-content:space-between;align-items:center;}
+.modal-head h3{margin:0;font-size:14.5px;font-weight:600;}
+.modal-head button{border:0;background:transparent;font-size:19px;color:var(--text-3);cursor:pointer;line-height:1;}
+.modal-body{padding:16px 18px;}
+.field{margin-bottom:13px;}
+.field label{display:block;font-size:12px;color:var(--text-2);margin-bottom:5px;}
+.field input{
+  width:100%;border:1px solid var(--border-strong);border-radius:7px;padding:8px 10px;
+  font-family:inherit;font-size:13.5px;outline:none;background:var(--panel);color:var(--text);
+}
+.field input:focus{border-color:var(--primary);}
+.field .tip{font-size:11px;color:var(--text-3);margin-top:4px;}
+.modal-foot{padding:13px 18px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;}
+.factors{font-size:11.5px;color:var(--text-3);background:var(--panel-2);border:1px solid var(--border);
+  border-radius:7px;padding:9px 11px;line-height:1.7;}
+
+#toast{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(70px);
+  background:var(--primary-deep);color:#fff;padding:9px 18px;border-radius:8px;font-size:13px;
+  opacity:0;transition:.22s;z-index:60;pointer-events:none;
+}
+#toast.on{opacity:1;transform:translateX(-50%) translateY(0);}
+
+@media(max-width:1000px){
+  main{grid-template-columns:1fr;grid-template-rows:minmax(320px,1fr) minmax(300px,1fr);}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1>司南</h1>
+    <span>学习规划平台</span>
+  </div>
+  <div class="roles" id="roles"></div>
+  <div class="spacer"></div>
+  <div class="stat">连续打卡 <b id="streak">0</b> 天</div>
+  <button class="btn" id="btnGoal">目标设置</button>
+  <button class="btn ok" id="btnCheckin">打卡</button>
+</header>
+
+<main>
+  <section class="card" id="chat">
+    <div class="card-head">
+      <h2>对话</h2>
+      <span class="hint">支持 @汇报 / @打卡 / @规划 / @日报，可直接发图</span>
+      <div class="spacer"></div>
+      <button class="btn" id="btnClear" style="padding:4px 10px;font-size:12px;">清空会话</button>
+    </div>
+    <div id="messages"></div>
+    <div id="composer">
+      <div id="thumbs"></div>
+      <div class="composer-row">
+        <button class="icon-btn" id="btnImg" title="上传学习照片">＋</button>
+        <textarea id="input" rows="1" placeholder="说点什么，或用 @汇报 提交今天的学习情况…"></textarea>
+        <button class="btn primary" id="btnSend">发送</button>
+      </div>
+      <div class="quick" id="quick"></div>
+    </div>
+  </section>
+
+  <section id="side">
+    <div class="card" style="flex:1;min-height:0;">
+      <div class="tabs">
+        <button class="tab on" data-pane="paneDaily">今日作战</button>
+        <button class="tab" data-pane="paneLong">长期规划</button>
+        <button class="tab" data-pane="paneMastery">掌握度画像</button>
+      </div>
+      <div class="pane on" id="paneDaily"><div class="empty">加载中…</div></div>
+      <div class="pane" id="paneLong"><div class="empty">尚未生成长期规划</div></div>
+      <div class="pane" id="paneMastery"><div class="empty">尚无掌握度记录</div></div>
+    </div>
+  </section>
+</main>
+
+<div class="modal" id="modal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3 id="modalTitle">目标设置</h3>
+      <button id="modalClose">×</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-foot">
+      <button class="btn" id="modalCancel">取消</button>
+      <button class="btn primary" id="modalSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<input type="file" id="filePicker" accept="image/*" multiple hidden>
+
+<script>
+/* ==================================================================
+   司南 · 前端
+   零依赖：原生 fetch + SSE 手工解析 + 极简 Markdown 渲染
+   ================================================================== */
+
+const API = '/api/v1';
+
+const state = {
+  userId: localStorage.getItem('sinan_uid') || 'default',
+  role: localStorage.getItem('sinan_role') || 'kaoyan',
+  threadId: localStorage.getItem('sinan_thread') || ('t' + Date.now()),
+  roles: [],
+  pendingImages: [],
+  busy: false,
+};
+
+localStorage.setItem('sinan_thread', state.threadId);
+
+/* ---------- 工具 ---------- */
+const $ = (s) => document.querySelector(s);
+
+function escapeHtml(s){
+  return String(s ?? '').replace(/[&<>"']/g, c => (
+    {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
+  ));
+}
+function inlineMd(s){
+  return s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+          .replace(/`([^`]+)`/g, '<code>$1</code>');
+}
+function markdown(text){
+  const lines = String(text ?? '').split('\n');
+  const out = [];
+  let list = [];
+  const flush = () => { if (list.length) { out.push('<ul>' + list.join('') + '</ul>'); list = []; } };
+
+  for (const raw of lines) {
+    const line = escapeHtml(raw);
+    const li = line.match(/^\s*[-*]\s+(.*)$/);
+    if (li) { list.push('<li>' + inlineMd(li[1]) + '</li>'); continue; }
+    flush();
+    if (!line.trim()) { out.push('<div class="sp"></div>'); continue; }
+    const h3 = line.match(/^###\s+(.*)$/);
+    if (h3) { out.push('<h4>' + inlineMd(h3[1]) + '</h4>'); continue; }
+    const h2 = line.match(/^##\s+(.*)$/);
+    if (h2) { out.push('<h3>' + inlineMd(h2[1]) + '</h3>'); continue; }
+    out.push('<p>' + inlineMd(line) + '</p>');
+  }
+  flush();
+  return out.join('');
+}
+
+let toastTimer;
+function toast(msg){
+  const el = $('#toast');
+  el.textContent = msg;
+  el.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('on'), 2200);
+}
+
+async function api(path, options = {}){
+  const res = await fetch(API + path, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`HTTP ${res.status} ${detail.slice(0, 160)}`);
+  }
+  return res.json();
+}
+
+/* ---------- 消息气泡 ---------- */
+function addMessage(role, html, raw){
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  if (raw) div.innerHTML = html;
+  else div.innerHTML = markdown(html);
+  $('#messages').appendChild(div);
+  $('#messages').scrollTop = $('#messages').scrollHeight;
+  return div;
+}
+
+/* ---------- 身份 ---------- */
+async function loadRoles(){
+  const data = await api('/roles');
+  state.roles = data.roles || [];
+  if (!state.roles.some(r => r.key === state.role)) state.role = state.roles[0]?.key || 'kaoyan';
+
+  const box = $('#roles');
+  box.innerHTML = '';
+  state.roles.forEach(r => {
+    const btn = document.createElement('button');
+    btn.className = 'role-btn' + (r.key === state.role ? ' on' : '');
+    btn.textContent = r.name;
+    btn.title = r.description + ' ｜ 优先度因子：' + r.factors.map(f => f.label).join('、');
+    btn.onclick = () => switchRole(r.key);
+    box.appendChild(btn);
+  });
+
+  const pack = currentPack();
+  $('#quick').innerHTML = '';
+  [
+    ['日报', '@日报'],
+    ['打卡', '@打卡'],
+    ['整体规划', '@规划'],
+    ['汇报今日', '@汇报 今天完成了'],
+  ].forEach(([label, text]) => {
+    const c = document.createElement('button');
+    c.className = 'chip';
+    c.textContent = label;
+    c.onclick = () => { $('#input').value = text; $('#input').focus(); };
+    $('#quick').appendChild(c);
+  });
+}
+
+function currentPack(){
+  return state.roles.find(r => r.key === state.role) || { name: '', goal_fields: [], factors: [] };
+}
+
+async function switchRole(key){
+  state.role = key;
+  localStorage.setItem('sinan_role', key);
+  document.querySelectorAll('.role-btn').forEach((b, i) => {
+    b.classList.toggle('on', state.roles[i].key === key);
+  });
+  await refreshAll();
+  addMessage('sys', `已切换到「${currentPack().name}」身份`);
+}
+
+/* ---------- 目标设置 ---------- */
+function openGoalModal(){
+  const pack = currentPack();
+  $('#modalTitle').textContent = `目标设置 · ${pack.name}`;
+
+  const fields = pack.goal_fields || [];
+  let html = '';
+  fields.forEach(f => {
+    const isDate = /date/i.test(f.name);
+    const type = isDate ? 'date' : (f.type === 'number' ? 'number' : 'text');
+    html += `<div class="field">
+      <label>${escapeHtml(f.label)}</label>
+      <input data-name="${escapeHtml(f.name)}" type="${type}" value="${escapeHtml(f.default ?? '')}"
+        placeholder="${f.type === 'list' ? '多个用逗号分隔' : ''}">
+    </div>`;
+  });
+  html += `<div class="field">
+      <label>每日可用学习时长（小时）</label>
+      <input data-name="__daily_hours" type="number" step="0.5" min="0.5" value="4">
+    </div>`;
+  html += `<div class="factors"><b>该身份的优先度因子与权重</b><br>` +
+    pack.factors.map(f => `${escapeHtml(f.label)} ${f.weight > 0 ? '+' : ''}${f.weight}`).join(' ｜ ') +
+    `<br><span style="color:var(--text-3)">因子与权重由身份包提供，引擎不感知具体身份。</span></div>`;
+
+  $('#modalBody').innerHTML = html;
+  $('#modal').classList.add('on');
+  loadProfileIntoForm();
+}
+
+async function loadProfileIntoForm(){
+  try {
+    const data = await api(`/profile?user_id=${state.userId}&role=${state.role}`);
+    const p = data.profile;
+    if (!p) return;
+    const goal = p.goal_payload || {};
+    document.querySelectorAll('#modalBody input[data-name]').forEach(inp => {
+      const name = inp.dataset.name;
+      if (name === '__daily_hours') { inp.value = p.daily_hours ?? 4; return; }
+      const v = goal[name];
+      if (v !== undefined && v !== null) inp.value = Array.isArray(v) ? v.join(',') : v;
+    });
+  } catch (e) { /* 无目标属正常情况 */ }
+}
+
+async function saveProfile(){
+  const goal = {};
+  let dailyHours = 4;
+
+  document.querySelectorAll('#modalBody input[data-name]').forEach(inp => {
+    const name = inp.dataset.name;
+    const v = inp.value.trim();
+    if (name === '__daily_hours') { dailyHours = parseFloat(v) || 4; return; }
+    if (v === '') return;
+    const field = (currentPack().goal_fields || []).find(f => f.name === name);
+    if (field && field.type === 'number') goal[name] = parseFloat(v);
+    else if (field && field.type === 'list') goal[name] = v.split(/[,，]/).map(s => s.trim()).filter(Boolean);
+    else goal[name] = v;
+  });
+
+  try {
+    const data = await api('/profile', {
+      method: 'PUT',
+      body: JSON.stringify({
+        user_id: state.userId,
+        role: state.role,
+        goal_payload: goal,
+        daily_hours: dailyHours,
+      }),
+    });
+    $('#modal').classList.remove('on');
+    toast('目标已保存');
+    addMessage('sys', `目标已更新：${data.goal_summary || '（已保存）'}`);
+    await refreshAll();
+  } catch (e) {
+    toast('保存失败：' + e.message);
+  }
+}
+
+/* ---------- 打卡 ---------- */
+async function doCheckin(){
+  try {
+    const data = await api('/log/checkin', {
+      method: 'POST',
+      body: JSON.stringify({ user_id: state.userId, role: state.role }),
+    });
+    $('#streak').textContent = data.streak;
+    addMessage('sys', data.message);
+    toast(data.message);
+  } catch (e) {
+    toast('打卡失败：' + e.message);
+  }
+}
+
+/* ---------- 计划渲染 ---------- */
+function prioClass(p){ return p >= 0.75 ? 'hi' : (p >= 0.45 ? 'mid' : 'lo'); }
+
+function renderDaily(plan){
+  const pane = $('#paneDaily');
+  if (!plan || (!plan.tasks?.length && !plan.carry_over?.length)) {
+    pane.innerHTML = '<div class="empty">当前没有需要安排的知识点。<br>请先点击右上角「目标设置」填写考试日期与每日时长。</div>';
+    return;
+  }
+
+  let html = `<div class="plan-meta">
+      <span>${escapeHtml(plan.date || '')}</span>
+      <span>预计 <b>${plan.total_hours ?? 0}</b> / ${plan.budget_hours ?? '—'} 小时</span>
+    </div>`;
+
+  const renderTask = (t, carry) => {
+    const partial = t.partial ? `<span class="partial-tag">今日推进 ${t.planned_hours}h / 共 ${t.est_hours}h</span>` : '';
+    return `<div class="task${carry ? ' carry' : ''}">
+      <div class="task-top">
+        <div>
+          <div class="task-name">${escapeHtml(t.kp)}${partial}</div>
+          <div class="task-sub">${escapeHtml(t.subject || '')}${t.chapter ? ' · ' + escapeHtml(t.chapter) : ''}
+            ｜ 考频 ${(t.exam_freq ?? 0).toFixed(2)} ｜ 当前掌握 ${(t.mastery ?? 0).toFixed(2)}</div>
+        </div>
+        <span class="prio ${prioClass(t.priority ?? 0)}">${(t.priority ?? 0).toFixed(2)}</span>
+      </div>
+      <div class="task-body">
+        <span class="lbl">为什么先做它</span>${escapeHtml(t.reason || '')}
+        <span class="lbl">验收标准</span>${escapeHtml(t.acceptance || '')}
+      </div>
+    </div>`;
+  };
+
+  if (plan.carry_over?.length) {
+    html += `<div style="font-size:12px;color:var(--text-3);margin:2px 0 7px;">昨日顺延</div>`;
+    plan.carry_over.forEach(t => { html += renderTask(t, true); });
+  }
+  plan.tasks.forEach(t => { html += renderTask(t, false); });
+
+  if (plan.coach_note) html += `<div class="note-box">${escapeHtml(plan.coach_note)}</div>`;
+  pane.innerHTML = html;
+}
+
+function renderLong(plan){
+  const pane = $('#paneLong');
+  if (!plan?.milestones?.length) {
+    pane.innerHTML = '<div class="empty">尚未生成长期规划。<br>在对话框发送「整体规划」即可生成。</div>';
+    return;
+  }
+  let html = `<div class="note-box" style="margin-top:0;margin-bottom:14px;">${escapeHtml(plan.coverage_note || '')}</div>`;
+  plan.milestones.forEach(m => {
+    const kps = m.target_kps || [];
+    const preview = kps.slice(0, 8).map(escapeHtml).join('、') + (kps.length > 8 ? ' …' : '');
+    html += `<div class="mile">
+      <div class="mile-name">${escapeHtml(m.name)}</div>
+      <div class="mile-date">${escapeHtml(m.start_date)} → ${escapeHtml(m.end_date)}</div>
+      <div class="mile-note">${escapeHtml(m.note)}</div>
+      <div class="mile-kp">覆盖 ${kps.length} 个考点：${preview}</div>
+    </div>`;
+  });
+  pane.innerHTML = html;
+}
+
+function renderMastery(summary){
+  const pane = $('#paneMastery');
+  if (!summary || !summary.total) {
+    pane.innerHTML = '<div class="empty">尚无掌握度记录。<br>提交一次 @汇报 后，画像就会开始积累。</div>';
+    return;
+  }
+  const bar = (item) => {
+    const v = item.mastery ?? 0;
+    const color = v < 0.4 ? '#b42318' : (v < 0.7 ? '#b45309' : '#1a7f4b');
+    return `<div class="mrow">
+      <div class="mn" title="${escapeHtml(item.kp_name)}">${escapeHtml(item.kp_name)}</div>
+      <div class="mbar"><i style="width:${(v * 100).toFixed(0)}%;background:${color}"></i></div>
+      <div class="mval">${v.toFixed(2)}</div>
+    </div>`;
+  };
+
+  let html = `<div class="kpi">
+      <div><span>已记录知识点</span><b>${summary.total}</b></div>
+      <div><span>平均掌握度</span><b>${(summary.average ?? 0).toFixed(2)}</b></div>
+    </div>`;
+
+  if (summary.weakest?.length) {
+    html += `<div style="font-size:12px;color:var(--text-3);margin:2px 0 8px;">最薄弱（优先补）</div>`;
+    summary.weakest.forEach(i => { html += bar(i); });
+  }
+  if (summary.strongest?.length) {
+    html += `<div style="font-size:12px;color:var(--text-3);margin:14px 0 8px;">已较稳固</div>`;
+    summary.strongest.forEach(i => { html += bar(i); });
+  }
+  pane.innerHTML = html;
+}
+
+/* ---------- 刷新 ---------- */
+async function refreshAll(){
+  const q = `user_id=${state.userId}&role=${state.role}`;
+  try {
+    const [today, daily] = await Promise.all([
+      api(`/log/today?${q}`),
+      api('/plan/daily', {
+        method: 'POST',
+        body: JSON.stringify({ user_id: state.userId, role: state.role }),
+      }),
+    ]);
+    $('#streak').textContent = today.streak ?? 0;
+    renderDaily(daily.plan);
+  } catch (e) {
+    $('#paneDaily').innerHTML = `<div class="empty">加载失败：${escapeHtml(e.message)}</div>`;
+  }
+
+  try {
+    const m = await api(`/mastery?${q}`);
+    renderMastery(m.summary);
+  } catch (e) { /* 忽略 */ }
+}
+
+async function loadLongPlan(){
+  try {
+    const data = await api(`/plan/long?user_id=${state.userId}&role=${state.role}`);
+    renderLong(data.plan);
+  } catch (e) {
+    $('#paneLong').innerHTML = `<div class="empty">加载失败：${escapeHtml(e.message)}</div>`;
+  }
+}
+
+/* ---------- 图片上传 ---------- */
+function fileToDataUrl(file){
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(fr.result);
+    fr.onerror = reject;
+    fr.readAsDataURL(file);
+  });
+}
+
+async function uploadImage(file){
+  try {
+    const res = await fetch(`${API}/oss/presign?filename=${encodeURIComponent(file.name)}`);
+    if (!res.ok) throw new Error('presign ' + res.status);
+    const { uploadUrl, contentType, accessUrl } = await res.json();
+
+    const put = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': contentType },
+      body: file,
+    });
+    if (!put.ok) throw new Error('put ' + put.status);
+    return accessUrl;
+  } catch (e) {
+    // 降级：OSS 未配置或跨域失败时，直接把图片内联传给后端
+    if (file.size > 1.5 * 1024 * 1024) {
+      throw new Error('图片超过 1.5MB 且 OSS 上传不可用，请压缩后重试');
+    }
+    return await fileToDataUrl(file);
+  }
+}
+
+function renderThumbs(){
+  const box = $('#thumbs');
+  box.innerHTML = '';
+  state.pendingImages.forEach((src, i) => {
+    const d = document.createElement('div');
+    d.className = 'thumb';
+    d.innerHTML = `<img src="${src}"><button data-i="${i}">×</button>`;
+    d.querySelector('button').onclick = () => {
+      state.pendingImages.splice(i, 1);
+      renderThumbs();
+    };
+    box.appendChild(d);
+  });
+}
+
+async function handleFiles(files){
+  for (const f of files) {
+    try {
+      const url = await uploadImage(f);
+      state.pendingImages.push(url);
+      renderThumbs();
+    } catch (e) {
+      toast('图片上传失败：' + e.message);
+    }
+  }
+}
+
+/* ---------- 发送（SSE） ---------- */
+async function send(){
+  if (state.busy) return;
+  const text = $('#input').value.trim();
+  const images = state.pendingImages.slice();
+  if (!text && !images.length) return;
+
+  state.busy = true;
+  $('#btnSend').disabled = true;
+
+  let userHtml = markdown(text || '（图片）');
+  images.forEach(src => { userHtml += `<img class="preview" src="${src}">`; });
+  addMessage('user', userHtml, true);
+
+  $('#input').value = '';
+  state.pendingImages = [];
+  renderThumbs();
+
+  const bot = addMessage('bot', '正在思考…');
+  bot.classList.add('typing');
+  let first = true;
+  let buffer = '';
+
+  const append = (chunk) => {
+    if (first) { bot.innerHTML = ''; bot.classList.remove('typing'); first = false; }
+    buffer += chunk;
+    bot.innerHTML = markdown(buffer);
+    $('#messages').scrollTop = $('#messages').scrollHeight;
+  };
+
+  try {
+    const res = await fetch(`${API}/chat/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: text,
+        image_url: images[0] || null,
+        thread_id: state.threadId,
+        user_id: state.userId,
+        role: state.role,
+      }),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+
+      const frames = buf.split('\n\n');
+      buf = frames.pop();
+
+      for (const frame of frames) {
+        for (const line of frame.split('\n')) {
+          if (!line.startsWith('data:')) continue;
+          const payload = line.slice(5).trim();
+          if (!payload) continue;
+          if (payload === '[DONE]') continue;
+
+          let evt;
+          try { evt = JSON.parse(payload); }
+          catch { append(payload); continue; }
+
+          if (evt.type === 'text') append(evt.text);
+          else if (evt.type === 'status') { if (first) bot.innerHTML = markdown('_' + evt.text + '_'); }
+          else if (evt.type === 'checkin') {
+            $('#streak').textContent = evt.streak ?? $('#streak').textContent;
+          }
+          else if (evt.type === 'plan') { renderDaily(evt.plan); refreshMasterySoon(); }
+          else if (evt.type === 'error') append('\n[错误] ' + evt.text);
+        }
+      }
+    }
+  } catch (e) {
+    if (first) { bot.classList.remove('typing'); bot.innerHTML = ''; }
+    append('\n[请求失败] ' + e.message);
+  } finally {
+    bot.classList.remove('typing');
+    if (first) bot.innerHTML = markdown('（无内容返回）');
+    state.busy = false;
+    $('#btnSend').disabled = false;
+  }
+
+  if (buffer.includes('长期阶段规划')) loadLongPlan();
+  setTimeout(refreshMasterySoon, 600);
+}
+
+async function refreshMasterySoon(){
+  try {
+    const m = await api(`/mastery?user_id=${state.userId}&role=${state.role}`);
+    renderMastery(m.summary);
+  } catch (e) { /* 忽略 */ }
+}
+
+/* ---------- 事件绑定 ---------- */
+$('#btnGoal').onclick = openGoalModal;
+$('#modalClose').onclick = () => $('#modal').classList.remove('on');
+$('#modalCancel').onclick = () => $('#modal').classList.remove('on');
+$('#modalSave').onclick = saveProfile;
+$('#modal').onclick = (e) => { if (e.target.id === 'modal') $('#modal').classList.remove('on'); };
+
+$('#btnCheckin').onclick = doCheckin;
+$('#btnSend').onclick = send;
+
+$('#btnImg').onclick = () => $('#filePicker').click();
+$('#filePicker').onchange = (e) => {
+  handleFiles(e.target.files);
+  e.target.value = '';
+};
+
+$('#input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+});
+$('#input').addEventListener('input', (e) => {
+  e.target.style.height = 'auto';
+  e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+});
+
+function activateTab(paneId){
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.pane === paneId));
+  document.querySelectorAll('.pane').forEach(p => p.classList.toggle('on', p.id === paneId));
+  if (paneId === 'paneLong') loadLongPlan();
+  if (paneId === 'paneMastery') refreshMasterySoon();
+  history.replaceState(null, '', '#' + paneId.replace('pane', '').toLowerCase());
+}
+
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.onclick = () => activateTab(tab.dataset.pane);
+});
+
+$('#btnClear').onclick = async () => {
+  try {
+    await api(`/chat/messages?thread_id=${state.threadId}&user_id=${state.userId}&role=${state.role}`,
+      { method: 'DELETE' });
+    $('#messages').innerHTML = '';
+    addMessage('sys', '会话已清空（掌握度画像不受影响）');
+  } catch (e) { toast('清空失败：' + e.message); }
+};
+
+// 拖拽上传
+const chatCard = $('#chat');
+chatCard.addEventListener('dragover', (e) => { e.preventDefault(); });
+chatCard.addEventListener('drop', (e) => {
+  e.preventDefault();
+  if (e.dataTransfer.files?.length) handleFiles(e.dataTransfer.files);
+});
+
+/* ---------- 启动 ---------- */
+(async function init(){
+  addMessage('sys', '司南已就位。先设置目标，再发送「@日报」领取今日清单。');
+  try {
+    await loadRoles();
+    await refreshAll();
+
+    // 支持 #long / #mastery 直达对应面板（便于分享与截图）
+    const hash = (location.hash || '').replace('#', '').toLowerCase();
+    if (hash === 'long') activateTab('paneLong');
+    else if (hash === 'mastery') activateTab('paneMastery');
+
+    const p = currentPack();
+    const prof = await api(`/profile?user_id=${state.userId}&role=${state.role}`).catch(() => null);
+    const hasGoal = prof && prof.profile && Object.keys(prof.profile.goal_payload || {}).length;
+    if (!hasGoal && (p.goal_fields || []).length) setTimeout(openGoalModal, 500);
+  } catch (e) {
+    addMessage('bot', '初始化失败：' + e.message + '\n\n请确认后端已启动（python -m app.main）。');
+  }
+})();
+</script>
+</body>
+</html>

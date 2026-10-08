@@ -1,0 +1,56 @@
+# ============================================================
+# 司南 · 提交忽略规则
+# 原则：密钥不留痕 / 运行时数据不入库 / 只提交源码与文档
+# ============================================================
+
+# ---------- 密钥（最高优先级，务必保留）----------
+.env
+.env.*
+!.env.example
+
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ---------- 虚拟环境 ----------
+.venv/
+venv/
+env/
+
+# ---------- Jupyter ----------
+.ipynb_checkpoints/
+
+# ---------- LangGraph 本地运行数据 ----------
+.langgraph_api/
+
+# ---------- IDE ----------
+.idea/
+.vscode/
+*.swp
+*.bak_*
+
+# ---------- 数据库（运行时数据 + 用户数据，不入库）----------
+# sinan.db 里的 69 个考点由 roles/kaoyan.py 的 ensure_kp_tree() 重建，无需提交
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# ---------- 日志与系统文件 ----------
+*.log
+.DS_Store
+Thumbs.db
+
+# ---------- 原私厨前端构建产物（约 1.6M，留本地作备份）----------
+src/app/static_legacy/
+
+# ---------- 学习笔记本（个人练习记录；HelloWord.ipynb 内含本地 API key）----------
+src/project/

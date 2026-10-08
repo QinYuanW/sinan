@@ -1,0 +1,7 @@
+{
+    "dependencies": ["."],
+    "graphs": {
+        "sinan_agent": "./src/app/agent/sinan_agent.py:agent"
+    },
+    "env": ".env"
+}

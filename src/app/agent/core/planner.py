@@ -64,14 +64,8 @@ def build_context(
     if exam_date:
         days_left = (_parse_date(exam_date) - _date.today()).days
 
-    # 上次复习时间从 mastery 表取
-    last_review: dict[str, str] = {}
-    for row in repo.conn.execute(
-        "SELECT kp_name, last_review_at FROM mastery WHERE user_id = ? AND role = ?",
-        (user_id, role),
-    ).fetchall():
-        if row["last_review_at"]:
-            last_review[row["kp_name"]] = str(row["last_review_at"])[:10]
+    # 上次复习时间走仓储方法（L10：原先这里是裸 SQL，切 Store 后端会漏网）
+    last_review: dict[str, str] = repo.get_last_review_map(user_id, role)
 
     return PlanningContext(
         user_id=user_id,
@@ -203,11 +197,27 @@ PHASES = [
     ("冲刺阶段", 0.75, 1.00, "真题实战与错题回炉，只保高频高性价比内容"),
 ]
 
-
 def generate_long_plan(
-    repo: SQLiteRepository, user_id: str, role: str
+    repo: SQLiteRepository,
+    user_id: str,
+    role: str,
+    persist: bool = True,
 ) -> dict[str, Any]:
-    """按剩余天数把考点分配到三个阶段里程碑"""
+    """按剩余天数把考点分配到三个阶段里程碑。
+
+    L8 改动：新增 `persist` 开关，把「算」与「存」拆开。
+
+    为什么必须拆：
+        `interrupt` 会让**被中断的节点从头重跑**（官方语义：resumes from the
+        start of the node, re-executing all logic）。如果"算"和"问确认"挤在
+        同一个节点里，用户每确认一次，这张规划就被重算一次——纯浪费。
+        拆开之后，恢复时只重跑"问"那个节点，"算"的结果安稳躺在 state 里。
+
+    `persist=False` 时只返回计划、不落库——这正是「确认才落库」的前提：
+        先算给你看，你点头了才写进 plan 表。
+
+    默认 True 保持原有调用方（legacy 路径）行为不变。
+    """
     pack = get_pack(role)
     ensure_kp_tree(repo, user_id, role, pack)
     ctx = build_context(repo, user_id, role, pack)
@@ -262,8 +272,37 @@ def generate_long_plan(
         "milestones": milestones,
         "coverage_note": coverage_note,
     }
-    repo.save_plan(user_id, role, "long", today.isoformat(), plan)
+
+    if persist:
+        save_long_plan(repo, user_id, role, plan, date=today.isoformat())
     return plan
+
+
+def save_long_plan(
+    repo: SQLiteRepository,
+    user_id: str,
+    role: str,
+    plan: dict[str, Any],
+    date: str | None = None,
+    status: str = "active",
+) -> None:
+    """把长期规划落库（L8 从 generate_long_plan 里抽出来）。
+
+    单独成函数的意义：让「什么时候写库」变成一个**显式的调用点**。
+    在图里，这个调用点被放在 interrupt 之后——
+    于是「确认才落库」不是靠注释保证的，而是靠代码结构保证的：
+    不走到这一行，数据库里就没有这份规划。
+
+    status 参数留给后续做「待确认」草稿态（plan 表已有该字段，无需改表）。
+    """
+    repo.save_plan(
+        user_id,
+        role,
+        "long",
+        date or _today(),
+        plan,
+        status=status,
+    )
 
 
 # ======================================================================

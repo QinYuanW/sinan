@@ -5,7 +5,16 @@
 
 记忆职责划分（重要）：
     LangGraph checkpoints/writes  -> 会话内短期上下文（由 SqliteSaver 管理）
-    mastery 表                   -> 跨会话长期画像（由本仓储管理）
+    mastery 表 / Store            -> 跨会话长期画像（由本仓储管理）
+
+L10 说明：**掌握度的存储后端是可切换的**。
+    默认走 mastery 表（原行为一字未变）；
+    设 `SINAN_USE_STORE=1` 则改走 LangGraph 官方 Store
+    （见 `app/db/memory_store.py`，含"为什么只有画像该搬过去"的边界讨论）。
+
+    切换只影响"画像存在哪"，**读写接口与上层调用完全不变**——
+    这是仓储模式应该有的样子：换存储不该穿透到业务代码。
+    验证方式也很直接：同一个自检脚本跑两遍，只差一个环境变量，结果必须一致。
 """
 
 from __future__ import annotations
@@ -16,6 +25,7 @@ from datetime import datetime, date as _date
 from pathlib import Path
 from typing import Any, Iterable
 
+from app.db import memory_store
 from app.db.models import DB_PATH, get_connection
 
 # 掌握度的先验值：知识点在没有任何证据时的初始判断（0.3 = 薄弱）。
@@ -229,6 +239,7 @@ class SQLiteRepository:
     def list_plans(
         self, user_id: str, role: str, ptype: str, limit: int = 10
     ) -> list[dict[str, Any]]:
+        """获取用户最近的计划。"""
         rows = self.conn.execute(
             """
             SELECT * FROM plan
@@ -373,6 +384,10 @@ class SQLiteRepository:
     # 掌握度画像
     # ------------------------------------------------------------------
     def get_mastery_map(self, user_id: str, role: str) -> dict[str, float]:
+        # L10：存储后端可切换（mastery 表 / 官方 Store）
+        if memory_store.use_store():
+            return memory_store.load_map(user_id, role)
+
         rows = self.conn.execute(
             "SELECT kp_name, mastery FROM mastery WHERE user_id = ? AND role = ?",
             (user_id, role),
@@ -380,11 +395,33 @@ class SQLiteRepository:
         return {r["kp_name"]: float(r["mastery"]) for r in rows}
 
     def get_mastery(self, user_id: str, role: str, kp_name: str) -> float | None:
+        if memory_store.use_store():
+            return memory_store.get_one(user_id, role, kp_name)
+
         row = self.conn.execute(
             "SELECT mastery FROM mastery WHERE user_id = ? AND role = ? AND kp_name = ?",
             (user_id, role, kp_name),
         ).fetchone()
         return float(row["mastery"]) if row else None
+
+    def get_last_review_map(self, user_id: str, role: str) -> dict[str, str]:
+        """{知识点: 上次复习日期 YYYY-MM-DD}。
+
+        L10 新增：原先 planner.build_context 里直接写了一行裸 SQL 读这张表，
+        切 Store 后端时它会成为漏网的硬编码。收进仓储层，
+        "换存储不穿透业务代码"这条原则才真正成立。
+        """
+        if memory_store.use_store():
+            return memory_store.load_last_review(user_id, role)
+
+        out: dict[str, str] = {}
+        for row in self.conn.execute(
+            "SELECT kp_name, last_review_at FROM mastery WHERE user_id = ? AND role = ?",
+            (user_id, role),
+        ).fetchall():
+            if row["last_review_at"]:
+                out[row["kp_name"]] = str(row["last_review_at"])[:10]
+        return out
 
     def update_mastery(
         self,
@@ -413,7 +450,13 @@ class SQLiteRepository:
         base = PRIOR_MASTERY if old is None else old
         new = round(base + alpha * (accuracy - base), 4)
 
-        if old is None:
+        if memory_store.use_store():
+            # 指数平滑公式完全不变，只把"落到哪"换掉——
+            # 业务的数学逻辑不该因为换存储而改变
+            memory_store.put_one(
+                user_id, role, kp_name, new, subject=subject, last_review_at=now
+            )
+        elif old is None:
             with self.conn:
                 self.conn.execute(
                     """
@@ -453,15 +496,23 @@ class SQLiteRepository:
 
     def mastery_summary(self, user_id: str, role: str) -> dict[str, Any]:
         """掌握度概览：总数 / 平均 / 薄弱项"""
-        rows = self.conn.execute(
-            """
-            SELECT kp_name, subject, mastery, evidence_count
-            FROM mastery WHERE user_id = ? AND role = ?
-            ORDER BY mastery ASC
-            """,
-            (user_id, role),
-        ).fetchall()
-        items = [dict(r) for r in rows]
+        if memory_store.use_store():
+            # Store 不保证顺序，得自己排——与 SQL 的 ORDER BY mastery ASC 对齐。
+            # 聚合逻辑（下面的 n/3 划分）一个字没改，这就是"换后端不换业务"的样子。
+            items = sorted(
+                memory_store.load_rows(user_id, role),
+                key=lambda x: float(x.get("mastery") or 0.0),
+            )
+        else:
+            rows = self.conn.execute(
+                """
+                SELECT kp_name, subject, mastery, evidence_count
+                FROM mastery WHERE user_id = ? AND role = ?
+                ORDER BY mastery ASC
+                """,
+                (user_id, role),
+            ).fetchall()
+            items = [dict(r) for r in rows]
         if not items:
             return {"total": 0, "average": None, "weakest": [], "strongest": []}
         avg = round(sum(i["mastery"] for i in items) / len(items), 4)

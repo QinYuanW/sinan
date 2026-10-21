@@ -44,6 +44,33 @@
 
 ---
 
+## 界面预览
+
+<table>
+<tr>
+<td width="50%">
+<img src="docs/screenshots/daily-plan.png" alt="今日清单">
+<br><sub><b>今日清单</b> — 每项标注「为什么先做它」「验收标准」，可跳过或延期</sub>
+</td>
+<td width="50%">
+<img src="docs/screenshots/briefing.png" alt="每日早报">
+<br><sub><b>每日早报</b> — 昨日复盘 / 今天最该补的 / 今日清单 / 考研资讯</sub>
+</td>
+</tr>
+<tr>
+<td>
+<img src="docs/screenshots/weekly.png" alt="周报">
+<br><sub><b>周报</b> — 打卡率 · 完成率 · 进步项 · 每日明细表 · 完成率趋势</sub>
+</td>
+<td>
+<img src="docs/screenshots/quick-report.png" alt="一键汇报">
+<br><sub><b>一键汇报</b> — 三档点选（基本都对 / 对一半 / 没做），10 秒完成</sub>
+</td>
+</tr>
+</table>
+
+---
+
 ## 架构
 
 ```

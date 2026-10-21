@@ -23,7 +23,6 @@ MASTERED_THRESHOLD = 0.85
 # 优先级低于该值的知识点不值得占用当日时间
 MIN_PRIORITY = 0.15
 
-
 def score_kp(
     ctx: PlanningContext,
     kp: dict[str, Any],
@@ -96,7 +95,6 @@ def rank_kps(
         scored = scored[:limit]
     return scored
 
-
 def explain(item: dict[str, Any], ctx: PlanningContext) -> str:
     """把因子明细翻译成人话。推荐理由必须可解释，这是本项目的核心主张。"""
     parts: list[str] = []
@@ -137,7 +135,6 @@ def explain(item: dict[str, Any], ctx: PlanningContext) -> str:
     reason = "；".join(parts) if parts else "按当前整体优先级排序"
     return f"{reason}。预计投入 {float(item.get('est_hours', 2.0)):.1f} 小时。"
 
-
 def acceptance_for(item: dict[str, Any]) -> str:
     """验收标准：让"今天学会了"变成一个可判断的事实，而不是感觉。"""
     difficulty = float(item.get("difficulty", 0.5))
@@ -146,7 +143,6 @@ def acceptance_for(item: dict[str, Any]) -> str:
     if difficulty >= 0.5:
         return "能独立完成 5 道同类真题且全对，并能默写关键公式与适用条件。"
     return "能独立完成 5 道基础题且全对，概念题不再出错。"
-
 
 def build_daily_plan(
     ctx: PlanningContext,

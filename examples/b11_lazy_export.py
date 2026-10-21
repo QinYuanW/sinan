@@ -50,7 +50,12 @@ def __getattr__(name: str):
     """
     if name == "agent":
         # 真实项目：return get_agent("default", "kaoyan")
-        return _build_agent("default", "kaoyan")
+        obj = _build_agent("default", "kaoyan")
+        globals()[name] = obj  # ← 加在这里(缓存版)
+        """globals()[name] = obj 就是把"刚构建出来的对象"塞进模块的属性字典，
+        让后续的同名属性访问在常规查找阶段就能命中，从而跳过 __getattr__，
+        实现一次性构建 + 永久缓存。"""
+        return obj
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 

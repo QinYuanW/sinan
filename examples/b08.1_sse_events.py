@@ -197,7 +197,7 @@ def frontend():
     es.addEventListener('token', e => {
       document.getElementById('msg').textContent += e.data;
     });
-    es.addEventListener('tool_call', e => {
+    es.addEventListener('tool_call', e => {  
       const d = JSON.parse(e.data);
       document.getElementById('status').innerHTML =
         '<span class="tool">🔧 正在调用工具：' + d.name + '（id=' + e.lastEventId + '）</span>';

@@ -91,9 +91,24 @@ def build_mastery_tools(
             ensure_ascii=False,
         )
 
+    # ↓ 注意这个工具【没有任何参数】—— user_id / role 捕由闭包获，
+    #   模型既看不见、也改不了。这就是工厂函数存在的全部理由。
+    @tool
+    def get_study_streak() -> str:
+        """查询当前用户的连续打卡天数。
+
+        连续天数是成本最低的执行力信号。制定计划前先看一眼：
+        断签后刚重启的一两天，应主动降低强度，避免二次中断。
+        """
+        return json.dumps(
+            {"streak_days": repo.check_in_streak(user_id, role)},
+            ensure_ascii=False,
+        )
+
     return [
         get_mastery_overview,
         get_kp_mastery,
         list_weak_kps,
         record_practice_result,
+        get_study_streak,
     ]

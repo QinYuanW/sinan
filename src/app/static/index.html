@@ -746,7 +746,9 @@ async function send(){
       buf = frames.pop();
 
       for (const frame of frames) {
+        let evtName = null;
         for (const line of frame.split('\n')) {
+          if (line.startsWith('event:')) { evtName = line.slice(6).trim(); continue; }
           if (!line.startsWith('data:')) continue;
           const payload = line.slice(5).trim();
           if (!payload) continue;
@@ -755,6 +757,11 @@ async function send(){
           let evt;
           try { evt = JSON.parse(payload); }
           catch { append(payload); continue; }
+
+          if (evtName === 'tool_call') {
+            if (first) bot.innerHTML = markdown('_正在调用工具：' + (evt.name || '') + ' …_');
+            continue;
+          }
 
           if (evt.type === 'text') append(evt.text);
           else if (evt.type === 'status') { if (first) bot.innerHTML = markdown('_' + evt.text + '_'); }

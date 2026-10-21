@@ -30,13 +30,16 @@
 TODO（学完自己改）
     1) 再加一个 handler，把 HTTPException 统一成 {code, message, hint} 结构
     2) 想清楚：为什么 KeyError（未知身份包）用 400 而不是 404？
+
+    未知身份包是参数值非法（请求体里 role 不在白名单），不是资源不存在，所以用 400 而不是 404。
+    判断标准是「请求的资源（接口路径指向的东西）是否存在」。
 """
 
 from __future__ import annotations
 
 from datetime import date
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request,HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, ValidationError
 
@@ -119,6 +122,25 @@ async def _key_error_handler(request: Request, exc: KeyError):
     return JSONResponse(
         status_code=400,
         content={"error": "未知身份包", "detail": str(exc).strip("'\"")},
+    )
+
+
+@app_handled.exception_handler(HTTPException)
+async def _http_exception_handler(request: Request, exc: HTTPException):
+    """统一 HTTPException 的响应格式为 {code, message, hint}。
+
+    detail 可以是 str 或 dict；dict 里可带 hint 字段给前端额外提示。
+    """
+    detail = exc.detail
+    if isinstance(detail, dict):
+        message = detail.get("message", str(detail))
+        hint = detail.get("hint", "")
+    else:
+        message = str(detail)
+        hint = ""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"code": exc.status_code, "message": message, "hint": hint},
     )
 
 

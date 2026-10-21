@@ -22,6 +22,8 @@ TODO（学完自己改）
     1) 把司南 .env 里的 ZHIPUAI_API_KEY 临时删掉，启动服务。
        应该能正常起来，只有"上传照片"时才会报错 —— 这就是懒加载的收益。
     2) 想清楚：单例为什么不用每次 new？SqliteSaver 每次 new 会怎样？
+    单例不每次 new，是因为构造有开销、资源要复用、状态要统一；
+    SqliteSaver 每次 new 会泄漏数据库连接，最终导致 too many open files 或 database is locked。
 """
 
 from __future__ import annotations

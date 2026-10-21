@@ -26,13 +26,13 @@ from app.agent.roles import get_pack, list_packs
 from app.common.logger import logger
 from app.db.repository import SQLiteRepository
 
-
 def _today() -> str:
+    """获取当前日期。"""
     return _date.today().isoformat()
-
 
 def _repo() -> SQLiteRepository:
     # 延迟导入避免循环依赖（sinan_agent 也持有仓储单例）
+    """获取仓储单例。"""
     from app.agent.sinan_agent import get_repo
 
     return get_repo()
@@ -134,7 +134,6 @@ async def handle_report(
         "summary": _report_summary(parse, result),
     }
 
-
 def _report_summary(parse, result: dict[str, Any]) -> str:
     """给出一段人类可读的汇报回执"""
     lines = [f"## 汇报回执（{parse.date}）"]
@@ -180,8 +179,8 @@ async def handle_daily_plan(
     )
     return {"status": "ok", "plan": plan}
 
-
 async def handle_long_plan(user_id: str, role: str) -> dict[str, Any]:
+    """生成长期规划。"""
     repo = _repo()
     plan = await asyncio.to_thread(generate_long_plan, repo, user_id, role)
     return {"status": "ok", "plan": plan}
@@ -193,8 +192,8 @@ async def handle_long_plan(user_id: str, role: str) -> dict[str, Any]:
 def handle_roles() -> dict[str, Any]:
     return {"status": "ok", "roles": list_packs()}
 
-
 def handle_profile_get(user_id: str, role: str) -> dict[str, Any]:
+    """获取用户画像。"""
     repo = _repo()
     pack = get_pack(role)
     profile = repo.get_profile(user_id, role)
@@ -208,7 +207,6 @@ def handle_profile_get(user_id: str, role: str) -> dict[str, Any]:
         "streak": repo.check_in_streak(user_id, role),
     }
 
-
 def handle_profile_set(
     user_id: str,
     role: str,
@@ -217,6 +215,7 @@ def handle_profile_set(
     daily_hours: float | None = None,
     subjects: list[str] | None = None,
 ) -> dict[str, Any]:
+    """设置用户画像。"""
     repo = _repo()
     pack = get_pack(role)
 
@@ -261,13 +260,14 @@ def handle_profile_set(
         else "目标已保存，可以生成长期规划了。",
     }
 
-
 def handle_mastery(user_id: str, role: str) -> dict[str, Any]:
+    """获取用户掌握度。"""
     repo = _repo()
     return {"status": "ok", "summary": repo.mastery_summary(user_id, role)}
 
 
 def handle_history(user_id: str, role: str, days: int = 14) -> dict[str, Any]:
+    """获取用户学习历史。"""
     repo = _repo()
     logs = repo.list_recent_logs(user_id, role, limit=days)
     return {

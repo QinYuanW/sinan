@@ -233,6 +233,7 @@ main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 430px;gap:16px;padd
       <h2>对话</h2>
       <span class="hint">支持 @汇报 / @打卡 / @规划 / @日报，可直接发图</span>
       <div class="spacer"></div>
+      <button class="btn" id="btnBriefing" style="padding:4px 10px;font-size:12px;">早报</button>
       <button class="btn" id="btnClear" style="padding:4px 10px;font-size:12px;">清空会话</button>
     </div>
     <div id="messages"></div>
@@ -894,6 +895,42 @@ function activateTab(paneId){
 document.querySelectorAll('.tab').forEach(tab => {
   tab.onclick = () => activateTab(tab.dataset.pane);
 });
+
+/* ============================================================
+   每日早报（L13）
+   ------------------------------------------------------------
+   为什么默认先拉"无资讯"版本：
+     复盘是查库（毫秒），资讯是搜索+总结（3~5 秒且花钱）。
+     先秒出复盘，用户能立刻看到；想看资讯再点「刷新资讯」。
+   ============================================================ */
+async function showBriefing(withNews = false){
+  const tip = addMessage('bot', withNews ? '正在抓取最新资讯…' : '正在整理昨天的记录…');
+  tip.classList.add('typing');
+  try {
+    const q = `/briefing/daily?user_id=${encodeURIComponent(state.userId)}`
+            + `&role=${encodeURIComponent(state.role)}`
+            + `&with_news=${withNews ? 1 : 0}`;
+    const data = await api(q);
+    tip.remove();
+    if (data.status !== 'ok' || !data.briefing) {
+      addMessage('bot', '早报生成失败：' + (data.message || '未知原因'));
+      return;
+    }
+    const b = data.briefing;
+    addMessage('bot', b.markdown, false);   /* false = 走 markdown 渲染 */
+    if (!withNews) {
+      const more = addMessage('bot',
+        '<button class="btn" onclick="showBriefing(true)" style="font-size:12px">'
+        + '获取今日资讯（约 5 秒）</button>', true);
+      more.dataset.hint = 'briefing';
+    }
+  } catch (e) {
+    tip.remove();
+    addMessage('bot', '早报请求失败：' + e.message);
+  }
+}
+
+$('#btnBriefing').onclick = () => showBriefing(false);
 
 $('#btnClear').onclick = async () => {
   try {

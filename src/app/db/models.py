@@ -110,11 +110,29 @@ DDL: list[str] = [
     )
     """,
 
+    # ---------- 每日早报（L13） ----------
+    # 为什么单独建表而不是每次现算：
+    #   ① 早报里的"资讯"要调 Tavily + 模型，每天只该搜一次
+    #   ② 早报是"当天已发出的事实"，事后回看不能被重算覆盖
+    #   ③ 前端每次刷新都现算会让页面卡 3~5 秒
+    """
+    CREATE TABLE IF NOT EXISTS briefing (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id     TEXT    NOT NULL,
+        role        TEXT    NOT NULL,
+        date        TEXT    NOT NULL,
+        payload     TEXT    NOT NULL DEFAULT '{}',
+        created_at  TEXT    NOT NULL,
+        UNIQUE (user_id, role, date)
+    )
+    """,
+
     # ---------- 索引 ----------
     "CREATE INDEX IF NOT EXISTS idx_kp_scope ON kp_node (user_id, role, subject)",
     "CREATE INDEX IF NOT EXISTS idx_plan_scope ON plan (user_id, role, ptype, date)",
     "CREATE INDEX IF NOT EXISTS idx_mastery_scope ON mastery (user_id, role)",
     "CREATE INDEX IF NOT EXISTS idx_log_scope ON daily_log (user_id, role, date)",
+    "CREATE INDEX IF NOT EXISTS idx_briefing_scope ON briefing (user_id, role, date)",
 ]
 
 

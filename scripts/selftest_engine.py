@@ -713,6 +713,67 @@ def main() -> int:
     print("     ✅ /health 端点 + 令牌中间件 + CORS 可配置 均就位")
     print("  OK L12：第二个身份包落地 · 租户三维隔离 · 上线三件套齐备")
 
+    # ---------------------------------------------------------------
+    print(SEP)
+    print("18. 每日早报（L13 · 复盘 + 薄弱点 + 资讯）")
+    print(SEP)
+
+    from datetime import date as _d, timedelta as _td  # noqa: E402
+
+    from app.agent.briefing import build_briefing, describe_briefing  # noqa: E402
+
+    uidE, roleE = "selftest_briefing", "kaoyan"
+    y_day = (_d.today() - _td(days=1)).isoformat()
+
+    repo.upsert_profile(uidE, roleE, name="早报测试",
+                        goal_payload={"exam_date": "2027-12-20", "math_type": "数二"},
+                        daily_hours=4.0, subjects=["数学"])
+    ensure_kp_tree(repo, uidE, roleE, pack)
+
+    # 造"昨天"：有清单、打卡了、完成 1 项、暴露 1 个问题
+    y_plan = generate_daily_plan(repo, uidE, roleE, date=y_day, force_refresh=True)
+    done_kp = y_plan["tasks"][0]["kp"] if y_plan["tasks"] else "极限的基本计算"
+    repo.check_in(uidE, roleE, y_day)
+    repo.save_report(
+        uidE, roleE, y_day,
+        raw="昨天做了几道题",
+        parsed={
+            "date": y_day, "completed_kps": [done_kp],
+            "accuracy": {done_kp: 0.5},
+            "problems": ["泰勒展开：阶数选取方法不会"],
+            "photos_recognized": [], "needs_followup": False, "followup_question": "",
+        },
+    )
+
+    # ① 生成（跳过资讯，避免自检依赖外部搜索）
+    b = build_briefing(repo, uidE, roleE, with_news=False, force=True)
+    print(f"  ① 生成 date={b['date']} yesterday={b['yesterday']}")
+    print(f"     复盘: 打卡={b['recap']['checked_in']} 计划={b['recap']['planned_count']} "
+          f"完成={len(b['recap']['completed_in_plan'])} 完成率={b['recap']['completion_rate']}")
+    print(f"     薄弱点 {len(b['weak_points'])} 个 · 建议 {len(b['suggestions'])} 条")
+    assert b["recap"]["checked_in"], "昨日打卡状态没读到"
+    assert b["recap"]["has_report"], "昨日汇报没读到"
+    assert b["recap"]["completion_rate"] == 1.0, "完成率算错"
+    assert b["weak_points"], "薄弱点为空"
+    # 昨日暴露的问题必须排第一（设计约定：最新鲜的优先）
+    assert "泰勒" in b["weak_points"][0]["kp"], f"薄弱点排序不对: {b['weak_points'][0]}"
+    print("     ✅ 事实由算法算（完成率 1.0 / 问题排第一）")
+
+    # ② 幂等：第二次不重算
+    b2 = build_briefing(repo, uidE, roleE, with_news=False)
+    print(f"  ② 幂等: cached={b2.get('cached')}（应为 True）")
+    assert b2.get("cached") is True, "早报幂等失效"
+
+    # ③ 渲染结构
+    md = b["markdown"]
+    for section in ("## 昨天", "## 今天最该补的", "## 今天怎么走", "## 外面发生了什么"):
+        assert section in md, f"Markdown 缺少段落: {section}"
+    print(f"  ③ Markdown {len(md)} 字符 · 四段齐全 ✅")
+
+    info = describe_briefing()
+    print(f"     事实来源: {info['fact_source']}")
+    print("  OK 早报：复盘靠算、薄弱点排序正确、当天幂等、四段渲染完整")
+
     repo.close()
 
     print(SEP)

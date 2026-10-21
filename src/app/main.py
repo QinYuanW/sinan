@@ -45,7 +45,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
-from app.api.v1 import chat, log, oss, plan, profile
+from app.api.v1 import briefing, chat, log, oss, plan, profile
 from app.common.logger import setup_logging
 from app.db.models import init_db
 
@@ -175,6 +175,7 @@ app.include_router(profile.router, prefix="/api/v1", tags=["身份与画像"])
 app.include_router(plan.router, prefix="/api/v1", tags=["计划"])
 app.include_router(log.router, prefix="/api/v1", tags=["打卡与汇报"])
 app.include_router(chat.router, prefix="/api/v1", tags=["对话"])
+app.include_router(briefing.router, prefix="/api/v1", tags=["每日早报"])
 app.include_router(oss.router, prefix="/api/v1", tags=["文件上传"])
 
 # 3. 前端静态资源

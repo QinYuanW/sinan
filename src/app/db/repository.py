@@ -532,3 +532,40 @@ class SQLiteRepository:
             "weakest": items[:k],
             "strongest": items[-k:][::-1],
         }
+
+    # ------------------------------------------------------------------
+    # 每日早报（L13）
+    # ------------------------------------------------------------------
+    def save_briefing(
+        self, user_id: str, role: str, date: str, payload: dict[str, Any]
+    ) -> None:
+        """写入/覆盖某天的早报。
+
+        覆盖而不是追加：早报是"当天对用户发出的那份东西"，
+        重新生成应当是**修正**而不是堆叠版本。
+        """
+        now = _now()
+        with self.conn:
+            self.conn.execute(
+                """
+                INSERT INTO briefing (user_id, role, date, payload, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT (user_id, role, date) DO UPDATE SET
+                    payload = excluded.payload,
+                    created_at = excluded.created_at
+                """,
+                (user_id, role, date, json.dumps(payload, ensure_ascii=False), now),
+            )
+
+    def get_briefing(
+        self, user_id: str, role: str, date: str
+    ) -> dict[str, Any] | None:
+        row = self.conn.execute(
+            "SELECT * FROM briefing WHERE user_id = ? AND role = ? AND date = ?",
+            (user_id, role, date),
+        ).fetchone()
+        if not row:
+            return None
+        data = dict(row)
+        data["payload"] = _loads(data.get("payload"), {})
+        return data

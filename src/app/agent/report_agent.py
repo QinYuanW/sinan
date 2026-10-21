@@ -192,9 +192,33 @@ async def parse_node(state: ReportState) -> dict[str, Any]:
     )
 
     # parse_report 内部会调视觉模型 + 结构化输出模型，是阻塞调用
-    parse = await asyncio.to_thread(
-        parse_report, material or None, photos, date, role
-    )
+    #
+    # ★ 这里必须再包一层 try（L14 故障注入发现的缺口）：
+    #   `parse_report` 自己虽然有降级（返回 needs_followup），
+    #   但它**整体抛异常**时（网络中断、依赖缺失、内部 bug），
+    #   异常会一路冒泡到 API，用户看到的是
+    #       "RuntimeError: 模型服务 503"
+    #   ——技术黑话，不是人话。
+    #
+    #   兜底成 needs_followup 之后，子图会走"追问"路径，
+    #   用户看到的是"需要你补充一下…"，**并且还能继续用**。
+    #   一个产品在依赖挂掉时的表现，比它在顺利时的表现更能决定口碑。
+    try:
+        parse = await asyncio.to_thread(
+            parse_report, material or None, photos, date, role
+        )
+    except Exception as exc:  # noqa: BLE001 — 依赖故障降级为追问，不中断会话
+        logger.error(f"[司南·report] 解析整体失败，降级为追问: {type(exc).__name__}: {exc}")
+        from app.models.schemas import ReportParse
+
+        parse = ReportParse(
+            date=date,
+            needs_followup=True,
+            followup_question=(
+                "自动解析暂时不可用。请直接用文字告诉我：今天做了哪些知识点、"
+                "正确率大概多少、哪里卡住了？"
+            ),
+        )
 
     logger.info(
         f"[司南·report] 解析结果 needs_followup={parse.needs_followup} "

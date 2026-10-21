@@ -774,6 +774,95 @@ def main() -> int:
     print(f"     事实来源: {info['fact_source']}")
     print("  OK 早报：复盘靠算、薄弱点排序正确、当天幂等、四段渲染完整")
 
+    # ---------------------------------------------------------------
+    print(SEP)
+    print("19. 故障注入（L14 · 外部依赖挂了会怎样）")
+    print(SEP)
+    # ★ 为什么要有这一节：
+    #   前 18 节全是"所有外部服务都正常"的快乐路径。但真实使用中，
+    #   模型会抽风、搜索会超额度、网络会断——**用户弃用一个产品，
+    #   往往不是因为功能少，而是因为某次故障后它直接白屏了**。
+    #   这一节专门把外部依赖打断，看降级链是否真的接得住。
+
+    import app.agent.report_agent as _ra2  # noqa: E402
+    import app.agent.tools.exam_search as _es  # noqa: E402
+
+    # ---------------- ① 解析模型整体抛异常 → 图不能崩 ----------------
+    _orig_parse2 = _ra2.parse_report
+
+    def _boom(*a, **k):
+        raise RuntimeError("模拟：模型服务 503")
+
+    _ra2.parse_report = _boom
+    try:
+        uidF, roleF = "selftest_fault", "kaoyan"
+        repo.upsert_profile(uidF, roleF, name="故障测试", goal_payload={},
+                            daily_hours=3.0, subjects=[])
+        ensure_kp_tree(repo, uidF, roleF, pack)
+
+        async def _run_fault():
+            # 图执行时节点抛异常，run_graph 会把异常抛给调用方；
+            # api 层的 try 会把它变成一条 error 事件（而不是 500 白屏）
+            try:
+                r = await _graph.run_graph("@汇报 今天做了8道题", "fault-1", uidF, roleF)
+                return "returned", r
+            except Exception as exc:  # noqa: BLE001
+                return "raised", exc
+            finally:
+                # ⚠️ 必须收尾（L8 踩过一次，这次又是同一颗雷）：
+                #    aiosqlite 连接背后是非守护线程，不关进程就退不出——
+                #    表现是"逻辑全对、自检通过、但进程卡住被 timeout 杀掉"。
+                await _graph.close_graph()
+
+        kind, payload = _asyncio.run(_run_fault())
+        print(f"  ① 解析模型 503 → run_graph 结果: {kind}")
+        # L14 修复后：parse_node 有兜底，异常不再冒泡，而是降级成"追问"
+        assert kind == "returned", "解析异常应被 parse_node 兜底，不该冒泡到调用方"
+        assert payload.interrupted, "降级后应挂起追问，而不是直接返回"
+        ip_fault = payload.interrupt or {}
+        print(f"     降级为追问: kind={ip_fault.get('kind')} "
+              f"问题={str(ip_fault.get('question'))[:36]}…")
+        assert ip_fault.get("kind") == "report_followup", "降级路径不对"
+        print("     ✅ 用户看到的是「需要你补充一下」，而不是 RuntimeError")
+        # 关键断言：此时**不能有脏数据落库**
+        log_after = repo.get_daily_log(uidF, roleF, _date_cls.today().isoformat())
+        assert log_after is None or not (log_after.get("report_parsed")), "解析失败却写入了汇报数据"
+        print("     ✅ 失败未污染业务数据")
+    finally:
+        _ra2.parse_report = _orig_parse2
+
+    # ---------------- ② 搜索挂了 → 早报其余四段照常 ----------------
+    _orig_invoke = _es.search_exam_info
+
+    class _DeadSearch:
+        def invoke(self, *a, **k):
+            raise RuntimeError("模拟：Tavily 额度耗尽")
+
+    _es.search_exam_info = _DeadSearch()
+    try:
+        b_fault = build_briefing(repo, uidE, roleE, with_news=True, force=True)
+        print(f"  ② 搜索不可用 → 资讯 {len(b_fault['news'])} 条")
+        assert b_fault["news"] == [], "搜索失败却返回了资讯（可能编造）"
+        assert "## 昨天" in b_fault["markdown"], "资讯失败把复盘也带崩了"
+        assert "今天没有抓到值得关注的更新" in b_fault["markdown"], "缺少降级提示文案"
+        print("     ✅ 资讯降级为'没有抓到更新'，复盘/薄弱点/建议三段落全部保留")
+    finally:
+        _es.search_exam_info = _orig_invoke
+
+    # ---------------- ③ 非法身份 → 不能被当成正常请求 ----------------
+    from app.agent.roles import has_pack  # noqa: E402
+
+    print(f"  ③ 未知身份包 has_pack('不存在的身份') = {has_pack('不存在的身份')}")
+    assert has_pack("不存在的身份") is False, "未知身份竟被识别为合法"
+    try:
+        get_pack("不存在的身份")
+        raise AssertionError("未知身份应抛 KeyError")
+    except KeyError as exc:
+        print(f"     ✅ 抛 KeyError，main.py 的 handler 会映射成 400（而不是 500）")
+        print(f"        提示语: {str(exc)[:50]}…")
+
+    print("  OK 故障注入：模型崩/搜索死/身份非法 三种情况均能优雅降级")
+
     repo.close()
 
     print(SEP)

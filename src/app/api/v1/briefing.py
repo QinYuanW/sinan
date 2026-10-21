@@ -56,6 +56,40 @@ async def get_daily_briefing(
     return {"status": "ok", "briefing": briefing}
 
 
+@router.get("/report/period")
+async def get_period_report(
+    user_id: str = "default",
+    role: str = "kaoyan",
+    kind: str = "week",
+    anchor: str | None = None,
+):
+    """周报 / 月报（L16）。
+
+    kind=week  近 7 天（含今天）
+    kind=month 近 30 天
+    anchor     结束日期，默认今天
+
+    返回里带 `series`（逐日序列，前端画趋势用）和 `markdown`（直接可读的全文）。
+    """
+    from app.agent.period_report import build_period_report
+
+    repo = get_repo()
+    try:
+        report = await asyncio.to_thread(
+            build_period_report, repo, user_id, role, kind, anchor
+        )
+    except ValueError as exc:
+        return {"status": "error", "message": str(exc), "report": None}
+    except Exception as exc:  # noqa: BLE001
+        logger.error(f"[司南·period] 生成失败: {type(exc).__name__}: {exc}")
+        return {
+            "status": "error",
+            "message": f"报告生成失败：{type(exc).__name__}",
+            "report": None,
+        }
+    return {"status": "ok", "report": report}
+
+
 @router.get("/briefing/meta")
 async def briefing_meta():
     """早报的组成说明（前端调试/答辩演示用）。"""

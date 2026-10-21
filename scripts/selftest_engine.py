@@ -869,6 +869,76 @@ def main() -> int:
 
     print("  OK 故障注入：模型崩/搜索死/身份非法 三种情况均能优雅降级")
 
+    # ---------------------------------------------------------------
+    print(SEP)
+    print("20. 周报/月报 + 任务跳过延期（L16）")
+    print(SEP)
+
+    from app.agent.period_report import build_period_report  # noqa: E402
+
+    uidG, roleG = "selftest_period", "kaoyan"
+    repo.upsert_profile(uidG, roleG, name="周期测试",
+                        goal_payload={"exam_date": "2027-12-20", "math_type": "数二"},
+                        daily_hours=4.0, subjects=["数学"])
+    ensure_kp_tree(repo, uidG, roleG, pack)
+
+    # 造 5 天：3 天完成、2 天没打卡
+    made = 0
+    for i in range(5):
+        d = (_date_cls.today() - _td(days=4 - i)).isoformat()
+        p = generate_daily_plan(repo, uidG, roleG, date=d, force_refresh=True)
+        if not p["tasks"]:
+            continue
+        if i % 2 == 0:                      # 隔天打卡
+            kp0 = p["tasks"][0]["kp"]
+            repo.check_in(uidG, roleG, d)
+            repo.save_report(uidG, roleG, d, raw="测试", parsed={
+                "date": d, "completed_kps": [kp0], "accuracy": {kp0: 0.8},
+                "problems": [], "photos_recognized": [],
+                "needs_followup": False, "followup_question": ""})
+            res = replan_after_report(
+                repo, uidG, roleG, d, accuracy={kp0: 0.8},
+                completed_kps=[kp0], problems=[])
+            repo.save_report(uidG, roleG, d, mastery_delta=res["mastery_delta"])
+            made += 1
+
+    r = build_period_report(repo, uidG, roleG, "week")
+    s = r["summary"]
+    print(f"  ① 周报 {r['start']}~{r['end']} · 打卡 {s['checked_days']}/7 · "
+          f"完成率 {s['completion_rate']}")
+    print(f"     画像平均涨 {s['mastery_gain_avg']:+.3f}（涉及 {s['kps_touched']} 个考点）")
+    assert len(r["series"]) == 7, "series 应为 7 天"
+    assert s["checked_days"] == made, f"打卡天数算错（应 {made}）"
+    # ★ 关键：平均涨幅必须是**每考点平均**，不能是简单累加
+    assert 0 <= s["mastery_gain_avg"] <= 1, f"平均涨幅越界: {s['mastery_gain_avg']}"
+    assert "## 每日明细" in r["markdown"], "缺少每日明细"
+    print("     ✅ 数字不越界（平均涨幅按考点数归一，不是简单累加）")
+
+    # ② 月报
+    rm = build_period_report(repo, uidG, roleG, "month")
+    assert len(rm["series"]) == 30, "月报应为 30 天"
+    print(f"  ② 月报 30 天 · 打卡 {rm['summary']['checked_days']} 天 ✅")
+
+    # ③ 跳过 / 延期
+    today = _date_cls.today().isoformat()
+    p_today = generate_daily_plan(repo, uidG, roleG, date=today, force_refresh=True)
+    if p_today["tasks"]:
+        kpX = p_today["tasks"][0]["kp"]
+        t1 = repo.update_plan_task(uidG, roleG, today, kpX, {"skipped": True})
+        print(f"  ③ 跳过「{kpX[:16]}」→ skipped={t1.get('skipped')}")
+        assert t1 and t1.get("skipped") is True, "跳过标记未写入"
+
+        t2 = repo.update_plan_task(uidG, roleG, today, kpX, {"skipped": False, "deferred": True})
+        print(f"     改成延期 → deferred={t2.get('deferred')} skipped={t2.get('skipped')}")
+        assert t2.get("deferred") is True and t2.get("skipped") is False, "延期切换失败"
+
+        missing = repo.update_plan_task(uidG, roleG, today, "不存在的考点XYZ", {"skipped": True})
+        assert missing is None, "不存在的任务应返回 None"
+        print("     不存在的任务 → None（不会误创建）✅")
+        print("  OK 周报：数字归一正确 · 月报 30 天 · 跳过/延期/恢复三态可切换")
+    else:
+        print("  ③ 今日无任务，跳过状态测试略过")
+
     repo.close()
 
     print(SEP)

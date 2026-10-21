@@ -90,6 +90,10 @@ main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 430px;gap:16px;padd
 .msg li{margin:2px 0;}
 .msg .sp{height:5px;}
 .msg img.preview{max-width:180px;border-radius:7px;margin-top:6px;border:1px solid var(--border);}
+.md-table{width:100%;border-collapse:collapse;margin:8px 0;font-size:12.5px;}
+.md-table th,.md-table td{border:1px solid var(--border);padding:4px 8px;text-align:left;}
+.md-table th{background:var(--panel-2);font-weight:500;color:var(--muted);}
+.md-table tr:nth-child(even) td{background:rgba(0,0,0,0.015);}
 .typing::after{content:'▍';animation:blink 1s steps(2) infinite;color:var(--primary);}
 @keyframes blink{50%{opacity:0;}}
 
@@ -234,6 +238,7 @@ main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 430px;gap:16px;padd
       <span class="hint">支持 @汇报 / @打卡 / @规划 / @日报，可直接发图</span>
       <div class="spacer"></div>
       <button class="btn" id="btnReport" style="padding:4px 10px;font-size:12px;">一键汇报</button>
+      <button class="btn" id="btnPeriod" style="padding:4px 10px;font-size:12px;">周报</button>
       <button class="btn" id="btnBriefing" style="padding:4px 10px;font-size:12px;">早报</button>
       <button class="btn" id="btnClear" style="padding:4px 10px;font-size:12px;">清空会话</button>
     </div>
@@ -315,10 +320,34 @@ function markdown(text){
   const lines = String(text ?? '').split('\n');
   const out = [];
   let list = [];
+  let table = [];
   const flush = () => { if (list.length) { out.push('<ul>' + list.join('') + '</ul>'); list = []; } };
+
+  /* 表格：连续的 "| ... |" 行攒起来一起渲染
+     （周报的每日明细就是表格，之前只认列表/标题，表格会原样吐出来） */
+  const flushTable = () => {
+    if (!table.length) return;
+    const rows = table.map(r => r.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim()));
+    table = [];
+    if (rows.length < 2) return;
+    /* 第二行是 |---|---| 分隔线 */
+    const head = rows[0], body = rows.slice(2);
+    let h = '<table class="md-table"><thead><tr>';
+    head.forEach(c => { h += '<th>' + inlineMd(c) + '</th>'; });
+    h += '</tr></thead><tbody>';
+    body.forEach(r => {
+      h += '<tr>';
+      r.forEach(c => { h += '<td>' + inlineMd(c) + '</td>'; });
+      h += '</tr>';
+    });
+    out.push(h + '</tbody></table>');
+  };
 
   for (const raw of lines) {
     const line = escapeHtml(raw);
+    /* 表格行优先判断（避免 |---| 被当成普通段落） */
+    if (/^\s*\|.*\|\s*$/.test(line)) { table.push(line); continue; }
+    flushTable();
     const li = line.match(/^\s*[-*]\s+(.*)$/);
     if (li) { list.push('<li>' + inlineMd(li[1]) + '</li>'); continue; }
     flush();
@@ -330,6 +359,7 @@ function markdown(text){
     out.push('<p>' + inlineMd(line) + '</p>');
   }
   flush();
+  flushTable();
   return out.join('');
 }
 
@@ -520,8 +550,16 @@ function renderDaily(plan){
       <span>预计 <b>${plan.total_hours ?? 0}</b> / ${plan.budget_hours ?? '—'} 小时</span>
     </div>`;
 
-  const renderTask = (t, carry) => {
+  const renderTask = (t, carry, idx) => {
     const partial = t.partial ? `<span class="partial-tag">今日推进 ${t.planned_hours}h / 共 ${t.est_hours}h</span>` : '';
+    /* L16：跳过 / 延期。用 idx 而不是把考点名塞进 onclick——
+       考点名里带括号和斜杠，拼进 onclick 容易炸；下标永远是安全的。 */
+    const acts = (idx !== undefined) ? `<div style="display:flex;gap:6px;margin-top:8px">
+        <button class="btn" onclick="setTaskState(${idx},'skip')"
+          style="font-size:11px;padding:2px 9px" title="今天不做了，明天也不会硬性顺延">今天跳过</button>
+        <button class="btn" onclick="setTaskState(${idx},'defer')"
+          style="font-size:11px;padding:2px 9px" title="今天没空，明天排在首位">延期到明天</button>
+      </div>` : '';
     return `<div class="task${carry ? ' carry' : ''}">
       <div class="task-top">
         <div>
@@ -535,6 +573,7 @@ function renderDaily(plan){
         <span class="lbl">为什么先做它</span>${escapeHtml(t.reason || '')}
         <span class="lbl">验收标准</span>${escapeHtml(t.acceptance || '')}
       </div>
+      ${acts}
     </div>`;
   };
 
@@ -542,10 +581,36 @@ function renderDaily(plan){
     html += `<div style="font-size:12px;color:var(--text-3);margin:2px 0 7px;">昨日顺延</div>`;
     plan.carry_over.forEach(t => { html += renderTask(t, true); });
   }
-  plan.tasks.forEach(t => { html += renderTask(t, false); });
+  /* 存一份给 setTaskState 用（只对 plan.tasks 按下标操作） */
+  state.dailyPlan = plan;
+  plan.tasks.forEach((t, i) => { html += renderTask(t, false, i); });
 
   if (plan.coach_note) html += `<div class="note-box">${escapeHtml(plan.coach_note)}</div>`;
   pane.innerHTML = html;
+}
+
+/* 跳过 / 延期（L16）
+   skip    今天不做了，明天也不硬性顺延（回算法池，该排还会被排上）
+   defer   今天没空，明天排首位（carry_over 会 +0.15 优先级）
+   restore 撤销 */
+async function setTaskState(idx, action){
+  const plan = state.dailyPlan;
+  if (!plan || !plan.tasks || !plan.tasks[idx]) { toast('清单已刷新，请重试'); return; }
+  const kp = plan.tasks[idx].kp;
+  try {
+    const r = await api('/plan/task', {
+      method: 'POST',
+      body: JSON.stringify({
+        user_id: state.userId, role: state.role,
+        date: plan.date, kp, action,
+      }),
+    });
+    if (r.status !== 'ok') { toast(r.message || '操作失败'); return; }
+    toast(action === 'skip' ? '已跳过（明天不再硬顺延）' : '已延期到明天首位');
+    await refreshAll();
+  } catch (e) {
+    toast('操作失败：' + e.message);
+  }
 }
 
 function renderLong(plan){
@@ -1021,6 +1086,90 @@ function submitQuickReport(){
   send();
 }
 
+/* ============================================================
+   周报 / 月报 + 趋势曲线（L16）
+   ------------------------------------------------------------
+   曲线用**手写 SVG**，不引 Chart.js：
+     一条折线 + 十几个点，引一个 200KB 的库不划算。
+     **能用 30 行 SVG 画出来的东西，不要上图表库。**
+   ============================================================ */
+function renderTrendChart(series, kind){
+  const pts = series.filter(r => r.completion_rate !== null);
+  if (pts.length < 2) return '';
+
+  const W = 540, H = 110, PAD = 26;
+  const iw = W - PAD * 2, ih = H - PAD * 2;
+  const n = pts.length;
+  const x = i => PAD + (n === 1 ? iw / 2 : (iw * i) / (n - 1));
+  const y = v => PAD + ih * (1 - Math.max(0, Math.min(1, v)));
+
+  /* 折线 */
+  const line = pts.map((r, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(r.completion_rate).toFixed(1)}`).join(' ');
+  /* 面积填充（看趋势比看线更直观） */
+  const area = `${line} L${x(n - 1).toFixed(1)},${(PAD + ih).toFixed(1)} L${x(0).toFixed(1)},${(PAD + ih).toFixed(1)} Z`;
+
+  let dots = '';
+  pts.forEach((r, i) => {
+    const c = r.completion_rate >= 0.85 ? '#3B6D11' : (r.completion_rate >= 0.5 ? '#854F0B' : '#A32D2D');
+    dots += `<circle cx="${x(i).toFixed(1)}" cy="${y(r.completion_rate).toFixed(1)}" r="3" fill="${c}"/>`;
+  });
+
+  let grid = '';
+  [0, 0.5, 1].forEach(v => {
+    grid += `<line x1="${PAD}" y1="${y(v).toFixed(1)}" x2="${W - PAD}" y2="${y(v).toFixed(1)}"
+      stroke="var(--border)" stroke-width="0.5" stroke-dasharray="3 3"/>`;
+    grid += `<text x="${PAD - 6}" y="${y(v) + 3}" text-anchor="end" font-size="10"
+      fill="var(--muted)">${v * 100}%</text>`;
+  });
+
+  let labels = '';
+  const step = Math.max(1, Math.ceil(n / 7));
+  pts.forEach((r, i) => {
+    if (i % step && i !== n - 1) return;
+    labels += `<text x="${x(i).toFixed(1)}" y="${H - 8}" text-anchor="middle" font-size="10"
+      fill="var(--muted)">${r.date.slice(5)}</text>`;
+  });
+
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;margin-top:8px">
+    ${grid}
+    <path d="${area}" fill="#378ADD" opacity="0.10"/>
+    <path d="${line}" fill="none" stroke="#378ADD" stroke-width="1.5"
+      stroke-linejoin="round" stroke-linecap="round"/>
+    ${dots}${labels}
+  </svg>`;
+}
+
+async function showPeriod(kind){
+  kind = kind || 'week';
+  const tip = addMessage('bot', kind === 'week' ? '正在汇总这一周…' : '正在汇总这一个月…');
+  tip.classList.add('typing');
+  try {
+    const data = await api(`/report/period?user_id=${encodeURIComponent(state.userId)}`
+      + `&role=${encodeURIComponent(state.role)}&kind=${kind}`);
+    tip.remove();
+    if (data.status !== 'ok' || !data.report) {
+      addMessage('bot', '报告生成失败：' + (data.message || '未知原因'));
+      return;
+    }
+    const r = data.report;
+    addMessage('bot', r.markdown, false);
+    /* 曲线单独一条消息（markdown 渲染器画不了 SVG） */
+    const chart = renderTrendChart(r.series, kind);
+    if (chart) {
+      addMessage('bot',
+        '<div style="font-size:12px;opacity:.75;margin-bottom:2px">每日完成率</div>' + chart, true);
+    }
+    const sw = addMessage('bot',
+      `<button class="btn" onclick="showPeriod('${kind === 'week' ? 'month' : 'week'}')" `
+      + `style="font-size:12px">${kind === 'week' ? '看月报' : '看周报'}</button>`, true);
+    sw.dataset.hint = 'period';
+  } catch (e) {
+    tip.remove();
+    addMessage('bot', '报告请求失败：' + e.message);
+  }
+}
+
+$('#btnPeriod').onclick = () => showPeriod('week');
 $('#btnReport').onclick = openQuickReport;
 $('#btnBriefing').onclick = () => showBriefing(false);
 

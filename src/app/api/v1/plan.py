@@ -29,6 +29,55 @@ async def long_plan(user_id: str = "default", role: str = "kaoyan"):
     return await service.handle_long_plan(user_id, role)
 
 
+@router.post("/plan/task")
+async def update_task_state(req: dict):
+    """跳过 / 延期 / 恢复清单里的某个任务（L16）。
+
+    body:
+        {"user_id": "u1", "role": "kaoyan", "date": "2026-10-21",
+         "kp": "矩阵的秩", "action": "skip" | "defer" | "restore"}
+
+    三种动作的语义（这是本功能最容易做错的地方）：
+
+        skip    今天不做了，**明天也不硬性顺延** → 放回算法池
+        defer   今天做不完，**明天排在清单首位**（carry_over 会 +0.15 优先级）
+        restore 撤销，恢复正常
+
+    ★ 为什么 skip 和 defer 要分开：
+        "跳过"如果还顺延，等于"明天继续烦你"，那用户按它就没意义了。
+        "延期"才是"我想做但现在没空"。
+        **两个动词对应两种用户意图，不能合成一个"删除"。**
+    """
+    from datetime import date as _d
+
+    user_id = req.get("user_id") or "default"
+    role = req.get("role") or "kaoyan"
+    date = req.get("date") or _d.today().isoformat()
+    kp = req.get("kp")
+    action = (req.get("action") or "").strip().lower()
+
+    if not kp:
+        return {"status": "error", "message": "缺少 kp（考点名）"}
+
+    patches = {
+        "skip": {"skipped": True, "deferred": False},
+        "defer": {"deferred": True, "skipped": False},
+        "restore": {"skipped": False, "deferred": False},
+    }
+    if action not in patches:
+        return {
+            "status": "error",
+            "message": f"未知 action '{action}'，可选: skip / defer / restore",
+        }
+
+    repo = get_repo()
+    task = repo.update_plan_task(user_id, role, date, kp, patches[action])
+    if task is None:
+        return {"status": "error", "message": f"清单里没有这个任务: {kp}"}
+
+    return {"status": "ok", "action": action, "task": task}
+
+
 @router.get("/plan/saved")
 def saved_plans(
     user_id: str = "default",

@@ -536,6 +536,51 @@ class SQLiteRepository:
     # ------------------------------------------------------------------
     # 每日早报（L13）
     # ------------------------------------------------------------------
+    def update_plan_task(
+        self,
+        user_id: str,
+        role: str,
+        date: str,
+        kp_name: str,
+        patch: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        """修改清单里某一个任务的状态（跳过 / 延期 / 恢复）。
+
+        ★ 为什么改 payload 而不是加表：
+            tasks 本来就是 plan.payload 里的 JSON 数组，加一列反而不对——
+            "这个任务今天跳过了"是**这条计划的一部分**，不是独立实体。
+            改 payload 的代价是每次要整条读改写（没有行级更新），
+            但一天最多几个任务、操作用户手动触发，完全够用。
+            **量级决定加表还是改 JSON**，这里选 JSON。
+
+        返回修改后的任务；找不到该考点返回 None。
+        """
+        plan = self.get_plan(user_id, role, "daily", date)
+        if not plan:
+            return None
+
+        payload = plan.get("payload") or {}
+        tasks = payload.get("tasks") or []
+
+        target = None
+        for t in tasks:
+            if (t.get("kp") or t.get("name")) == kp_name:
+                t.update(patch)
+                t["updated_at"] = _now()
+                target = t
+                break
+
+        if target is None:
+            return None
+
+        payload["tasks"] = tasks
+        with self.conn:
+            self.conn.execute(
+                "UPDATE plan SET payload = ?, updated_at = ? WHERE id = ?",
+                (json.dumps(payload, ensure_ascii=False), _now(), plan["id"]),
+            )
+        return target
+
     def save_briefing(
         self, user_id: str, role: str, date: str, payload: dict[str, Any]
     ) -> None:

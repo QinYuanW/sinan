@@ -143,6 +143,12 @@ def _collect_carry_over(
         kp_name = task.get("kp") or task.get("name")
         if not kp_name or kp_name in done:
             continue
+        # ★ L16：用户主动"跳过"的任务**不硬性顺延**。
+        #   否则"跳过"就成了"明天继续烦你"，等于没跳过。
+        #   跳过 = 放回池子，明天照常参与算法排序（该排还是会被排上，
+        #   但那是算法判断，不是系统硬塞）。
+        if task.get("skipped"):
+            continue
         if ctx.mastery_of(kp_name) >= 0.85:
             continue
         item = dict(task)
@@ -172,6 +178,11 @@ def _serialize(plan: dict[str, Any]) -> dict[str, Any]:
             "est_hours": est,
             "planned_hours": round(float(task.get("planned_hours", est)), 2),
             "partial": bool(task.get("partial", False)),
+            # L16：任务状态。两者互斥语义：
+            #   skipped  = 主动跳过，今日隐藏 + 明日不顺延
+            #   deferred = 主动延期，今日隐藏 + 明日强顺延（优先级会 +0.15）
+            "skipped": bool(task.get("skipped", False)),
+            "deferred": bool(task.get("deferred", False)),
             "priority": round(float(task.get("priority", 0.5)), 4),
             "reason": task.get("reason", ""),
             "acceptance": task.get("acceptance", ""),

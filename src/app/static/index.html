@@ -690,6 +690,68 @@ async function handleFiles(files){
 }
 
 /* ---------- 发送（SSE） ---------- */
+/* ============================================================
+   新事件渲染（L8/L9 的后端信号，前端原本不认识）
+   ------------------------------------------------------------
+   为什么要补：后端从 L7 起陆续在发 replan / confirm / followup，
+   而前端只认 text / status / checkin / plan —— 这些信号全被丢掉。
+   结果就是"功能做了，用户看不见"。这一节把它们接回界面。
+   ============================================================ */
+
+/* 画像更新卡片：汇报后掌握度怎么变了、计划有没有重排 */
+function renderReplanCard(evt){
+  const delta = evt.mastery_delta || {};
+  const items = Object.entries(delta);
+  if (!items.length && !evt.changed) return;
+
+  let h = '<div style="font-size:13px;line-height:1.7">';
+  h += '<div style="font-weight:500;margin-bottom:6px">画像更新</div>';
+  if (items.length){
+    h += '<ul style="margin:0 0 8px 18px;padding:0">';
+    items.forEach(([kp, v]) => {
+      const sign = v >= 0 ? '+' : '';
+      const color = v >= 0 ? '#A32D2D' : '#3B6D11';   /* 涨红跌绿，中国习惯 */
+      h += '<li>' + escapeHtml(kp)
+         + ' <span style="color:' + color + '">' + sign + Number(v).toFixed(2) + '</span></li>';
+    });
+    h += '</ul>';
+  }
+  if (evt.reason){
+    h += '<div style="opacity:.72">' + escapeHtml(evt.reason) + '</div>';
+  }
+  h += '</div>';
+  addMessage('bot', h, true);
+}
+
+/* 确认卡片：L8 的 interrupt 正在等用户点头，给两个按钮 */
+function renderConfirmCard(evt){
+  const q = evt.question || '需要你确认一下才能继续。';
+  const plan = evt.plan || null;
+  if (!plan) return;   /* 已经有一份渲染好的计划正文，这里只补按钮 */
+
+  const h = '<div style="font-size:13px">'
+    + '<div style="margin-bottom:10px">' + escapeHtml(q) + '</div>'
+    + '<div style="display:flex;gap:8px">'
+    + '<button class="btn primary" onclick="quickReply(\'确认保存\')">确认保存</button>'
+    + '<button class="btn" onclick="quickReply(\'取消\')">取消</button>'
+    + '</div></div>';
+  addMessage('bot', h, true);
+}
+
+/* 追问时把焦点送回输入框 —— 用户需要打字，不该再去点一下 */
+function focusForFollowup(evt){
+  const el = $('#input');
+  if (el) { el.focus(); }
+}
+
+/* 一键回复（确认卡片上的按钮用） */
+function quickReply(text){
+  const el = $('#input');
+  if (!el || state.busy) return;
+  el.value = text;
+  send();
+}
+
 async function send(){
   if (state.busy) return;
   const text = $('#input').value.trim();
@@ -769,6 +831,9 @@ async function send(){
             $('#streak').textContent = evt.streak ?? $('#streak').textContent;
           }
           else if (evt.type === 'plan') { renderDaily(evt.plan); refreshMasterySoon(); }
+          else if (evt.type === 'replan') { renderReplanCard(evt); }
+          else if (evt.type === 'confirm') { renderConfirmCard(evt); }
+          else if (evt.type === 'followup') { focusForFollowup(evt); }
           else if (evt.type === 'error') append('\n[错误] ' + evt.text);
         }
       }

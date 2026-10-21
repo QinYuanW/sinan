@@ -54,3 +54,6 @@ src/app/static_legacy/
 
 # ---------- 学习笔记本（个人练习记录；HelloWord.ipynb 内含本地 API key）----------
 src/project/
+
+# 知识库向量索引（可从 documents/ 重建，不入库）
+src/app/kb/index/

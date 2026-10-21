@@ -1,0 +1,45 @@
+# 司南 · 镜像构建排除清单
+#
+# 作用：`COPY` 时跳过这些路径，让镜像更小、构建更快，
+#       更重要的是 —— **避免把不该进去的东西打进发行物**。
+
+# 虚拟环境（容器里会重新 uv sync，拷进去纯属浪费几十 MB）
+.venv/
+venv/
+
+# 版本控制与 IDE
+.git/
+.gitignore
+.idea/
+.vscode/
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# ★ 密钥：绝对不能进镜像（镜像层可被 docker save 翻出来）
+.env
+.env.*
+!.env.example
+
+# ★ 运行时数据：用户数据不该打包进发行物
+#   （容器里用卷挂载，见 Dockerfile 的 mkdir 注释）
+*.db
+*.db-shm
+*.db-wal
+src/app/kb/index/
+
+# 自检产物
+_selftest*.db
+_selftest_checkpoints.db
+_selftest_store.db
+
+# 个人学习笔记（含明文 key，本就不在版本库里）
+src/project/
+
+# 文档与开发辅助（不影响运行）
+docs/
+examples/
+*.md
+!README.md

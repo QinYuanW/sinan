@@ -233,6 +233,7 @@ main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 430px;gap:16px;padd
       <h2>对话</h2>
       <span class="hint">支持 @汇报 / @打卡 / @规划 / @日报，可直接发图</span>
       <div class="spacer"></div>
+      <button class="btn" id="btnReport" style="padding:4px 10px;font-size:12px;">一键汇报</button>
       <button class="btn" id="btnBriefing" style="padding:4px 10px;font-size:12px;">早报</button>
       <button class="btn" id="btnClear" style="padding:4px 10px;font-size:12px;">清空会话</button>
     </div>
@@ -930,6 +931,97 @@ async function showBriefing(withNews = false){
   }
 }
 
+/* ============================================================
+   一键汇报（L15）
+   ------------------------------------------------------------
+   为什么要做：原来汇报要手打「今天做了极限8道题，正确率75%，
+   泰勒展开算错了」——每天打的字越多，坚持的天数越少。
+   改成一屏点选：任务列出来，每项点一下三档正确率，一键提交。
+
+   ★ 但不覆盖自由汇报：想细说还是可以直接 @汇报 打字，
+     这条路只是把"懒得打字的那天"接住了。
+   ============================================================ */
+let _qrState = {};   /* {kp: 'high'|'half'|'none'} */
+let _qrTasks = [];
+
+const QR_LEVELS = [
+  { key: 'high', label: '基本都对', acc: 0.9,  color: '#3B6D11' },
+  { key: 'half', label: '对一半',  acc: 0.55, color: '#854F0B' },
+  { key: 'none', label: '没做/没懂', acc: 0.15, color: '#A32D2D' },
+];
+
+async function openQuickReport(){
+  const tip = addMessage('bot', '正在读取今日清单…');
+  tip.classList.add('typing');
+  try {
+    const data = await api(`/briefing/daily?user_id=${encodeURIComponent(state.userId)}`
+      + `&role=${encodeURIComponent(state.role)}&with_news=false`);
+    tip.remove();
+    _qrTasks = (data.briefing && data.briefing.today_tasks) || [];
+    if (!_qrTasks.length) {
+      addMessage('bot', '今天还没有清单。先去「今日作战」生成一份，或者直接 @汇报 用文字描述。');
+      return;
+    }
+    _qrState = {};
+    renderQuickReport();
+  } catch (e) {
+    tip.remove();
+    addMessage('bot', '读取清单失败：' + e.message);
+  }
+}
+
+function renderQuickReport(){
+  let h = '<div style="font-size:13px"><div style="font-weight:500;margin-bottom:8px">'
+        + '今天这几项，分别是啥情况？</div>';
+  _qrTasks.forEach((t, i) => {
+    const cur = _qrState[t.kp] || '';
+    h += `<div style="margin:10px 0 4px">${i + 1}. <b>${escapeHtml(t.kp)}</b>`
+       + `<span style="opacity:.6">${t.hours ? ' · 约 ' + t.hours + 'h' : ''}</span></div>`;
+    h += '<div style="display:flex;gap:6px;flex-wrap:wrap">';
+    QR_LEVELS.forEach(lv => {
+      const on = cur === lv.key;
+      h += `<button class="btn" onclick="setQr('${escapeHtml(t.kp)}','${lv.key}')" `
+         + `style="font-size:12px;padding:4px 9px;`
+         + (on ? `background:${lv.color};color:#fff;border-color:${lv.color}` : '')
+         + `">${lv.label}</button>`;
+    });
+    h += '</div>';
+  });
+  h += '<div style="margin-top:14px"><button class="btn primary" onclick="submitQuickReport()" '
+     + 'style="font-size:12px">提交汇报</button>'
+     + '<span style="opacity:.6;font-size:12px;margin-left:8px">没选的按"没做"算</span></div></div>';
+  addMessage('bot', h, true);
+}
+
+function setQr(kp, level){
+  _qrState[kp] = level;
+  /* 重绘最后一条消息：简单粗暴但可靠（面板不像正文，重绘无副作用） */
+  const msgs = $('#messages');
+  const last = msgs.lastElementChild;
+  if (last) last.remove();
+  renderQuickReport();
+}
+
+function submitQuickReport(){
+  const done = [], missed = [];
+  _qrTasks.forEach(t => {
+    const lv = _qrState[t.kp];
+    if (lv === 'high' || lv === 'half') {
+      const acc = QR_LEVELS.find(x => x.key === lv).acc;
+      done.push(`${t.kp}（正确率约${Math.round(acc * 100)}%）`);
+    } else {
+      missed.push(t.kp);
+    }
+  });
+  if (!done.length && !missed.length) { toast('先选一下再提交'); return; }
+
+  let text = '@汇报 今天完成了：' + (done.length ? done.join('、') : '无');
+  if (missed.length) text += '；没做：' + missed.join('、');
+  $('#input').value = text;
+  send();
+}
+
+$('#btnReport').onclick = openQuickReport;
 $('#btnBriefing').onclick = () => showBriefing(false);
 
 $('#btnClear').onclick = async () => {

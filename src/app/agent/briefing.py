@@ -193,7 +193,50 @@ def _suggestions(recap: dict[str, Any], weak: list[dict[str, Any]], streak: int)
 
 
 # ======================================================================
-# ④ 资讯（模型只做压缩）
+# ④ 今日清单（纯读库 + 幂等生成）
+# ======================================================================
+def _today_tasks(repo, user_id: str, role: str, today: str) -> list[dict[str, Any]]:
+    """取今日清单的前几项，让早报能直接回答"现在该干什么"。
+
+    ★ 为什么早报必须带这个：
+        只告诉用户"你哪里弱"，等于把决策又推回给他——
+        他还得打开网页、看清单、再决定先做哪个。
+        **早报的价值在于"看完就能动手"，不是"看完知道哪里差"。**
+
+    生成策略：今天的计划还没排过，就顺手排一份（`generate_daily_plan` 本身幂等，
+    不会因为早报和前端各调一次就产生两份不一样的清单）。
+    """
+    try:
+        from app.agent.core.planner import generate_daily_plan
+
+        # ⚠️ 两个函数返回的**形状不一样**（踩过的坑）：
+        #     repo.get_plan()          -> {"payload": {"tasks": [...]}}   ← 带包装
+        #     generate_daily_plan()    -> {"tasks": [...]}                ← 就是 payload 本身
+        #   按包装去取后者会得到空列表，且**不报错**——
+        #   表现是"老用户能看到清单，新用户第一次永远看不到"。
+        existing = repo.get_plan(user_id, role, "daily", today)
+        if existing:
+            tasks = ((existing.get("payload") or {}).get("tasks")) or []
+        else:
+            generated = generate_daily_plan(repo, user_id, role, date=today) or {}
+            tasks = generated.get("tasks") or []
+
+        return [
+            {
+                "kp": t.get("kp", ""),
+                "hours": t.get("planned_hours") or t.get("est_hours"),
+                "priority": t.get("priority"),
+                "reason": (t.get("reason") or "")[:80],
+            }
+            for t in tasks[:3]
+        ]
+    except Exception as exc:  # noqa: BLE001 — 清单生成失败不该拖垮早报
+        logger.warning(f"[司南·briefing] 今日清单获取失败: {type(exc).__name__}: {exc}")
+        return []
+
+
+# ======================================================================
+# ⑤ 资讯（模型只做压缩）
 # ======================================================================
 def _fetch_news(role: str) -> list[dict[str, str]]:
     """搜 + 总结当日资讯。
@@ -282,6 +325,7 @@ def build_briefing(
     weak = _weak_points(repo, user_id, role, recap)
     streak = repo.check_in_streak(user_id, role)
     suggestions = _suggestions(recap, weak, streak)
+    today_tasks = _today_tasks(repo, user_id, role, today)
     news = _fetch_news(role) if with_news else []
 
     briefing = {
@@ -291,6 +335,7 @@ def build_briefing(
         "recap": recap,
         "weak_points": weak,
         "suggestions": suggestions,
+        "today_tasks": today_tasks,
         "news": news,
         "streak": streak,
         "headline": _headline(recap, weak, streak),
@@ -362,6 +407,18 @@ def render_briefing(b: dict[str, Any]) -> str:
     if b["suggestions"]:
         lines += ["", "## 今天怎么走"]
         lines.extend(f"- {s}" for s in b["suggestions"])
+
+    # ---- 今日清单（看完就能动手）----
+    if b.get("today_tasks"):
+        lines += ["", "## 今天的清单（已排好）"]
+        for i, t in enumerate(b["today_tasks"], 1):
+            hours = f" · 约 {t['hours']}h" if t.get("hours") else ""
+            prio = f" · 优先度 {t['priority']:.2f}" if t.get("priority") is not None else ""
+            lines.append(f"{i}. **{t['kp']}**{hours}{prio}")
+            if t.get("reason"):
+                lines.append(f"   {t['reason']}")
+        lines.append("")
+        lines.append("_完整清单在网页「今日作战」面板里；做完记得 `@汇报`。_")
 
     # ---- 资讯 ----
     lines += ["", "## 外面发生了什么"]

@@ -768,7 +768,13 @@ def main() -> int:
     md = b["markdown"]
     for section in ("## 昨天", "## 今天最该补的", "## 今天怎么走", "## 外面发生了什么"):
         assert section in md, f"Markdown 缺少段落: {section}"
-    print(f"  ③ Markdown {len(md)} 字符 · 四段齐全 ✅")
+    # ④ 闭环：早报要能直接回答"现在该干什么"
+    print(f"  ③ Markdown {len(md)} 字符 · 基础四段齐全 ✅")
+    if b.get("today_tasks"):
+        assert "## 今天的清单" in md, "有今日任务却没渲染清单段"
+        print(f"     今日清单 {len(b['today_tasks'])} 项已带入早报 → {b['today_tasks'][0]['kp'][:20]}")
+    else:
+        print("     今日清单为空（计划未生成），跳过该段 ✅")
 
     info = describe_briefing()
     print(f"     事实来源: {info['fact_source']}")
